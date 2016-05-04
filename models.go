@@ -3,7 +3,11 @@ package main
 import (
 	"github.com/jinzhu/gorm"
 	"golang.org/x/crypto/bcrypt"
+	"fmt"
 )
+
+// MinPasswordLength defines minimal length of password
+const MinPasswordLength = 6
 
 const salt = "cWWRcK0.8^eUgu_!V@@K6D^;#,jL+Yl"
 
@@ -20,6 +24,9 @@ type User struct {
 
 // SetPassword set hash for password
 func (u *User) SetPassword(password string) error {
+	if len(password) < MinPasswordLength {
+		return fmt.Errorf("Password length should be more or equal %d symbols", MinPasswordLength)
+	}
 	hash, err := bcrypt.GenerateFromPassword([]byte(password+salt), bcrypt.DefaultCost)
 	u.PasswordHash = hash
 	return err

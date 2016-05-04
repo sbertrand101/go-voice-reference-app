@@ -53,7 +53,7 @@ func getRoutes(router *gin.Engine, db *gorm.DB) {
 	}
 
 	router.POST("/login", authMiddleware.LoginHandler)
-	router.GET("/refreshToken", authMiddleware.RefreshHandler)
+	router.GET("/refreshToken", authMiddleware.MiddlewareFunc(), authMiddleware.RefreshHandler)
 
 	router.POST("/register", func(c *gin.Context) {
 		user := &User{}
