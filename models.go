@@ -21,7 +21,7 @@ type User struct {
 	SIPPassword  string `gorm:"column:sip_password;type:varchar(128)"`
 }
 
-// SetPassword set hash for password
+// SetPassword sets hash for password
 func (u *User) SetPassword(password string) error {
 	if len(password) < MinPasswordLength {
 		return fmt.Errorf("Password length should be more or equal %d symbols", MinPasswordLength)
@@ -31,7 +31,7 @@ func (u *User) SetPassword(password string) error {
 	return err
 }
 
-// ComparePasswords caompares hashed password with passed one
+// ComparePasswords compares hashed password with parameter
 func (u *User) ComparePasswords(password string) bool {
 	return bcrypt.CompareHashAndPassword(u.PasswordHash, []byte(password+salt)) == nil
 }

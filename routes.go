@@ -14,7 +14,7 @@ import (
 
 // RegisterForm is used on used registering
 type RegisterForm struct {
-	User           string `form:"user",json:"user",binding:"required"`
+	UserName       string `form:"userName",json:"userName",binding:"required"`
 	Password       string `form:"password",json:"password",binding:"required"`
 	RepeatPassword string `form:"repeatPassword",json:"repeatPassword",binding:"required"`
 }
@@ -44,31 +44,33 @@ func getRoutes(router *gin.Engine, db *gorm.DB) {
 			c.Set("user", user)
 			return true
 		},
-		Unauthorized: func(c *gin.Context, code int, message string) {
-			c.JSON(code, gin.H{
-				"code":    code,
-				"message": message,
-			})
-		},
+		Unauthorized: setErrorMessage,
 	}
 
 	router.POST("/login", authMiddleware.LoginHandler)
 	router.GET("/refreshToken", authMiddleware.MiddlewareFunc(), authMiddleware.RefreshHandler)
 
 	router.POST("/register", func(c *gin.Context) {
-		user := &User{}
 		form := &RegisterForm{}
 		err := c.Bind(form)
 		if err != nil {
-			c.AbortWithError(http.StatusBadRequest, err)
+			setError(c, http.StatusBadRequest, err)
 			return
 		}
 		if form.Password != form.RepeatPassword {
-			c.AbortWithError(http.StatusBadRequest, errors.New("Passwords are mismatched"))
+			setError(c, http.StatusBadRequest, errors.New("Passwords are mismatched"))
+			return
+		}
+		user := &User{
+			UserName: form.UserName,
+		}
+		if err = user.SetPassword(form.Password); err != nil {
+			setError(c, http.StatusBadRequest, err)
 			return
 		}
 		if err = db.Create(user).Error; err != nil {
-			c.AbortWithError(http.StatusBadRequest, err)
+			setError(c, http.StatusBadRequest, err, "User with such name exists already. Try another name.")
+			return
 		}
 		c.JSON(http.StatusOK, gin.H{
 			"id": user.ID,
@@ -80,4 +82,22 @@ func getRoutes(router *gin.Engine, db *gorm.DB) {
 			"private": "data",
 		})
 	})
+}
+
+func setErrorMessage(c *gin.Context, code int, message string) {
+	c.JSON(code, gin.H{
+		"code":    code,
+		"message": message,
+	})
+}
+
+func setError(c *gin.Context, code int, err error, message ...string) {
+	c.Error(err)
+	var errorMessage string
+	if len(message) > 0 {
+		errorMessage = message[0]
+	} else {
+		errorMessage = err.Error()
+	}
+	setErrorMessage(c, code, errorMessage)
 }
