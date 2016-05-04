@@ -5,17 +5,21 @@ import (
 	"github.com/jinzhu/gorm"
 	_ "github.com/jinzhu/gorm/dialects/postgres"
 	"os"
+	"fmt"
 )
 
 func main() {
 	router := gin.Default()
-	databaseSource := os.Getenv("DATABASE")
-	if databaseSource == "" {
-		databaseSource = "GoLangVoiceReferenceApp"
+	connectionString := os.Getenv("DATABASE_URI")
+	if connectionString == "" {
+		connectionString = "postgresql://localhost/golang_voice_reference_app?sslmode=disable"
 	}
-	db, err := gorm.Open("postgres", databaseSource)
+	db, err := gorm.Open("postgres", connectionString)
 	if err != nil {
-		panic("Failed to connect database")
+		panic(fmt.Sprintf("Failed to connect database: %s", err.Error()))
+	}
+	if err = AutoMigrate(db).Error; err != nil {
+		panic(fmt.Sprintf("Error on executing db migrations: %s", err.Error()))
 	}
 	getRoutes(router, db)
 	router.Run()

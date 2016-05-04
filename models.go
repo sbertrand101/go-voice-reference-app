@@ -13,13 +13,12 @@ const salt = "cWWRcK0.8^eUgu_!V@@K6D^;#,jL+Yl"
 
 // User model
 type User struct {
-	gorm.Model
-	ID           uint64
+	ID           uint64 `gorm:"primary_key"`
 	UserName     string `gorm:"type:varchar(64);not null;unique_index"`
 	PasswordHash []byte
-	PhoneNumber  string
-	SIPURI       string
-	SIPPassword  string
+	PhoneNumber  string `gorm:"type:varchar(32);unique_index"`
+	SIPURI       string `gorm:"column:sip_uri;type:varchar(1024)"`
+	SIPPassword  string `gorm:"column:sip_password;type:varchar(128)"`
 }
 
 // SetPassword set hash for password
@@ -35,4 +34,9 @@ func (u *User) SetPassword(password string) error {
 // ComparePasswords caompares hashed password with passed one
 func (u *User) ComparePasswords(password string) bool {
 	return bcrypt.CompareHashAndPassword(u.PasswordHash, []byte(password+salt)) == nil
+}
+
+// AutoMigrate updates tables in db using models definitions
+func AutoMigrate(db *gorm.DB) *gorm.DB {
+	return db.AutoMigrate(&User{})
 }

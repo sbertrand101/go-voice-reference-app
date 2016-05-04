@@ -27,7 +27,7 @@ func getRoutes(router *gin.Engine, db *gorm.DB) {
 		MaxRefresh: time.Hour * 24,
 		Authenticator: func(userId string, password string, c *gin.Context) (string, bool) {
 			user := &User{}
-			if db.First(user, "userName = ?", userId).RecordNotFound() {
+			if db.First(user, "UserName = ?", userId).RecordNotFound() {
 				return "", false
 			}
 			return strconv.FormatUint(user.ID, 10), user.ComparePasswords(password)
