@@ -31,7 +31,7 @@ func TestUserComparePasswords(t *testing.T) {
 func TestAutoMigrate(t *testing.T) {
 	connectionString := os.Getenv("DATABASE_URI")
 	if connectionString == "" {
-		connectionString = "postgresql://localhost/golang_voice_reference_app_test?sslmode=disable"
+		connectionString = "postgresql://postgres@localhost/golang_voice_reference_app_test?sslmode=disable"
 	}
 	db, err := gorm.Open("postgres", connectionString)
 	assert.NoError(t, err)

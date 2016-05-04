@@ -12,7 +12,7 @@ func main() {
 	router := gin.Default()
 	connectionString := os.Getenv("DATABASE_URI")
 	if connectionString == "" {
-		connectionString = "postgresql://localhost/golang_voice_reference_app?sslmode=disable"
+		connectionString = "postgresql://postgres@localhost/golang_voice_reference_app?sslmode=disable"
 	}
 	db, err := gorm.Open("postgres", connectionString)
 	if err != nil {
