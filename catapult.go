@@ -1,12 +1,13 @@
 package main
 
 import (
-	"github.com/gin-gonic/gin"
-	"github.com/bandwidthcom/go-bandwidth"
-	"os"
 	"fmt"
 	"math/rand"
+	"os"
 	"time"
+
+	"github.com/bandwidthcom/go-bandwidth"
+	"github.com/gin-gonic/gin"
 )
 
 const applicationName = "GolangVoiceReferenceApp"
@@ -38,10 +39,10 @@ func getApplicationID(context *gin.Context, api *bandwidth.Client) (string, erro
 		return applicationID, nil
 	}
 	applicationID, err = api.CreateApplication(&bandwidth.ApplicationData{
-		Name: applicationName,
-		AutoAnswer: true,
+		Name:               applicationName,
+		AutoAnswer:         true,
 		CallbackHTTPMethod: "POST",
-		IncomingCallURL: fmt.Sprintf("http://%s/callCallback", context.Request.Header.Get("Host")),
+		IncomingCallURL:    fmt.Sprintf("http://%s/callCallback", context.Request.Header.Get("Host")),
 	})
 	return applicationID, err
 }
@@ -68,7 +69,7 @@ func getDomainID(api *bandwidth.Client) (string, error) {
 	}
 	domainName = randomString(15)
 	domainID, err = api.CreateDomain(&bandwidth.CreateDomainData{
-		Name: domainName,
+		Name:        domainName,
 		Description: description,
 	})
 	return domainID, err
@@ -93,20 +94,19 @@ func createPhoneNumber(context *gin.Context, api *bandwidth.Client, areaCode str
 
 type sipAccount struct {
 	EndpointID string
-	URI string
-	Password string
+	URI        string
+	Password   string
 }
 
 type phoneData struct {
-	SipAccount *sipAccount
+	SipAccount  *sipAccount
 	PhoneNumber string
 }
-
 
 func createSIPAccount(context *gin.Context, api *bandwidth.Client) (*sipAccount, error) {
 	applicationID, err := getApplicationID(context, api)
 	if err != nil {
-		return nil,  err
+		return nil, err
 	}
 	domainID, err = getDomainID(api)
 	if err != nil {
@@ -116,10 +116,10 @@ func createSIPAccount(context *gin.Context, api *bandwidth.Client) (*sipAccount,
 	sipPassword := randomString(10)
 	id, err := api.CreateDomainEndpoint(domainID, &bandwidth.DomainEndpointData{
 		ApplicationID: applicationID,
-		DomainID: domainID,
-		Name: sipUserName,
-		Description: applicationName + "'s SIP Account",
-		Credentials: &bandwidth.DomainEndpointCredentials{Password: sipPassword},
+		DomainID:      domainID,
+		Name:          sipUserName,
+		Description:   applicationName + "'s SIP Account",
+		Credentials:   &bandwidth.DomainEndpointCredentials{Password: sipPassword},
 	})
 	if err != nil {
 		return nil, err
@@ -139,7 +139,7 @@ func createPhoneData(context *gin.Context, api *bandwidth.Client, areaCode strin
 	}
 	return &phoneData{
 		PhoneNumber: phoneNumber,
-		SipAccount: account,
+		SipAccount:  account,
 	}, nil
 }
 
