@@ -17,9 +17,16 @@ type RegisterForm struct {
 	UserName       string `form:"userName",json:"userName",binding:"required"`
 	Password       string `form:"password",json:"password",binding:"required"`
 	RepeatPassword string `form:"repeatPassword",json:"repeatPassword",binding:"required"`
+	AreaCode       string `form:"areaCode",json:"areaCode",binding:"required"`
 }
 
-func getRoutes(router *gin.Engine, db *gorm.DB) {
+func getRoutes(router *gin.Engine, db *gorm.DB) error {
+
+	api, err := getCatapultAPI();
+	if err != nil {
+		return err
+	}
+
 	authMiddleware := &jwt.GinJWTMiddleware{
 		Realm:      "Bandwidth",
 		Key:        []byte("9SbPxeIyvoT3HkIQ19wN9p_e_b6Xb7iJ"),
@@ -30,11 +37,11 @@ func getRoutes(router *gin.Engine, db *gorm.DB) {
 			if db.First(user, "UserName = ?", userId).RecordNotFound() {
 				return "", false
 			}
-			return strconv.FormatUint(user.ID, 10), user.ComparePasswords(password)
+			return strconv.FormatUint(uint64(user.ID), 10), user.ComparePasswords(password)
 		},
 		Authorizator: func(userId string, c *gin.Context) bool {
 			user := &User{}
-			id, err := strconv.ParseUint(userId, 10, 64)
+			id, err := strconv.ParseUint(userId, 10, 32)
 			if err != nil {
 				return false
 			}
@@ -63,6 +70,7 @@ func getRoutes(router *gin.Engine, db *gorm.DB) {
 		}
 		user := &User{
 			UserName: form.UserName,
+			AreaCode: form.AreaCode,
 		}
 		if err = user.SetPassword(form.Password); err != nil {
 			setError(c, http.StatusBadRequest, err)
@@ -70,6 +78,19 @@ func getRoutes(router *gin.Engine, db *gorm.DB) {
 		}
 		if err = db.Create(user).Error; err != nil {
 			setError(c, http.StatusBadRequest, err, "User with such name exists already. Try another name.")
+			return
+		}
+		data, err := createPhoneData(c, api, user.AreaCode)
+		if err != nil {
+			setError(c, http.StatusBadGateway, err, "Error on creating phone data: " + err.Error())
+			return
+		}
+		user.PhoneNumber = data.PhoneNumber
+		user.SIPURI = data.SipAccount.URI
+		user.SIPPassword = data.SipAccount.Password
+		user.EndpointID = data.SipAccount.EndpointID
+		if err = db.Save(user).Error; err != nil {
+			setError(c, http.StatusBadGateway, err, "Error on saving user's data")
 			return
 		}
 		c.JSON(http.StatusOK, gin.H{
@@ -82,6 +103,8 @@ func getRoutes(router *gin.Engine, db *gorm.DB) {
 			"private": "data",
 		})
 	})
+
+	return nil
 }
 
 func setErrorMessage(c *gin.Context, code int, message string) {

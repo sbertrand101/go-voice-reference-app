@@ -13,10 +13,12 @@ const salt = "cWWRcK0.8^eUgu_!V@@K6D^;#,jL+Yl"
 
 // User model
 type User struct {
-	ID           uint64 `gorm:"primary_key"`
+	gorm.Model
 	UserName     string `gorm:"type:varchar(64);not null;unique_index"`
 	PasswordHash []byte
+	AreaCode     string `gorm:"type:char(3)"`
 	PhoneNumber  string `gorm:"type:varchar(32);unique_index"`
+	EndpointID   string `gorm:"column:endpoint_id;type:varchar(64)"`
 	SIPURI       string `gorm:"column:sip_uri;type:varchar(1024)"`
 	SIPPassword  string `gorm:"column:sip_password;type:varchar(128)"`
 }
