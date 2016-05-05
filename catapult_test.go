@@ -94,3 +94,86 @@ func TestGetApplicationIDFail(t *testing.T) {
 	_, err := getApplicationID(createFakeGinContext(), api)
 	assert.Error(t, err)
 }
+
+func TestGetDomainWithNewDomain(t *testing.T) {
+	domainID = ""
+	server, api := startMockCatapultServer(t, []RequestHandler{
+		RequestHandler{
+			PathAndQuery:  "/v1/users/userID/domains",
+			Method:        http.MethodGet,
+			ContentToSend: `[]`,
+		},
+		RequestHandler{
+			PathAndQuery:     "/v1/users/userID/domains",
+			Method:           http.MethodPost,
+			EstimatedContent: `{"name":"random","description":"GolangVoiceReferenceApp's domain"}`,
+			HeadersToSend:    map[string]string{"Location": "/v1/users/userID/domains/123"},
+		},
+	})
+	useMockRandomString()
+	defer restoreRandomString()
+	defer server.Close()
+	id, name, _ := getDomain(api)
+	assert.Equal(t, "123", id)
+	assert.Equal(t, "random", name)
+}
+
+func TestGetDomainWithExistingDomain(t *testing.T) {
+	domainID = ""
+	server, api := startMockCatapultServer(t, []RequestHandler{
+		RequestHandler{
+			PathAndQuery:  "/v1/users/userID/domains",
+			Method:        http.MethodGet,
+			ContentToSend: `[{"name": "domain", "id": "0123", "description": "GolangVoiceReferenceApp's domain"}]`,
+		},
+	})
+	defer server.Close()
+	id, name, _ := getDomain(api)
+	assert.Equal(t, "0123", id)
+	assert.Equal(t, "domain", name)
+}
+
+func TestGetDomainRepeating(t *testing.T) {
+	domainID = ""
+	server, api := startMockCatapultServer(t, []RequestHandler{
+		RequestHandler{
+			PathAndQuery:  "/v1/users/userID/domains",
+			Method:        http.MethodGet,
+			ContentToSend: `[{"name": "domain1", "id": "1234", "description": "GolangVoiceReferenceApp's domain"}]`,
+		},
+	})
+	id, _, _ := getDomain(api)
+	server.Close()
+	assert.Equal(t, "1234", id)
+	id, _, _ = getDomain(api)
+	assert.Equal(t, "1234", id)
+	id, name, _ := getDomain(api)
+	assert.Equal(t, "1234", id)
+	assert.Equal(t, "domain1", name)
+}
+
+func TestGetDomainFail(t *testing.T) {
+	domainID = ""
+	server, api := startMockCatapultServer(t, []RequestHandler{
+		RequestHandler{
+			PathAndQuery:     "/v1/users/userID/domains",
+			Method:           http.MethodGet,
+			StatusCodeToSend: http.StatusBadRequest,
+		},
+	})
+	defer server.Close()
+	_, _,  err := getDomain(api)
+	assert.Error(t, err)
+}
+
+var originalRandomString = randomString
+
+func useMockRandomString(){
+	randomString = func(length int) string {
+		return "random"
+	}
+}
+
+func restoreRandomString(){
+	randomString = originalRandomString
+}

@@ -47,13 +47,13 @@ func getApplicationID(context *gin.Context, api *bandwidth.Client) (string, erro
 	return applicationID, err
 }
 
-func getDomainID(api *bandwidth.Client) (string, error) {
+func getDomain(api *bandwidth.Client) (string, string, error) {
 	if domainID != "" {
-		return domainID, nil
+		return domainID, domainName, nil
 	}
 	domains, err := api.GetDomains()
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 	var domain *bandwidth.Domain
 	const description = applicationName + "'s domain"
@@ -65,14 +65,14 @@ func getDomainID(api *bandwidth.Client) (string, error) {
 	if domain != nil {
 		domainID = domain.ID
 		domainName = domain.Name
-		return domainID, nil
+		return domainID, domainName, nil
 	}
 	domainName = randomString(15)
 	domainID, err = api.CreateDomain(&bandwidth.CreateDomainData{
 		Name:        domainName,
 		Description: description,
 	})
-	return domainID, err
+	return domainID, domainName, err
 }
 
 func createPhoneNumber(context *gin.Context, api *bandwidth.Client, areaCode string) (string, error) {
@@ -108,7 +108,7 @@ func createSIPAccount(context *gin.Context, api *bandwidth.Client) (*sipAccount,
 	if err != nil {
 		return nil, err
 	}
-	domainID, err = getDomainID(api)
+	domainID, domainName, err := getDomain(api)
 	if err != nil {
 		return nil, err
 	}
@@ -143,7 +143,7 @@ func createPhoneData(context *gin.Context, api *bandwidth.Client, areaCode strin
 	}, nil
 }
 
-func randomString(strlen int) string {
+var randomString = func(strlen int) string {
 	rand.Seed(time.Now().UTC().UnixNano())
 	const chars = "abcdefghijklmnopqrstuvwxyz0123456789"
 	result := make([]byte, strlen)
