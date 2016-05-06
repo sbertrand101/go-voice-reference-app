@@ -82,12 +82,12 @@ func getRoutes(router *gin.Engine, db *gorm.DB) error {
 		}
 		phoneNumber, err := api.CreatePhoneNumber(user.AreaCode)
 		if err != nil {
-			setError(c, http.StatusBadGateway, err, "Error on creating phone number: " + err.Error())
+			setError(c, http.StatusBadGateway, err, "Error on creating phone number: "+err.Error())
 			return
 		}
 		sipAccount, err := api.CreateSIPAccount()
 		if err != nil {
-			setError(c, http.StatusBadGateway, err, "Error on creating SIP Account: " + err.Error())
+			setError(c, http.StatusBadGateway, err, "Error on creating SIP Account: "+err.Error())
 			return
 		}
 		user.PhoneNumber = phoneNumber
@@ -100,6 +100,21 @@ func getRoutes(router *gin.Engine, db *gorm.DB) error {
 		}
 		c.JSON(http.StatusOK, gin.H{
 			"id": user.ID,
+		})
+	})
+
+	router.GET("/sipData", authMiddleware.MiddlewareFunc(), func(c *gin.Context) {
+		user := c.MustGet("user").(*User)
+		api := c.MustGet("catapultAPI").(catapultAPIInterface)
+		token, err := api.CreateSIPAuthToken(user.EndpointID)
+		if err != nil {
+			setError(c, http.StatusBadGateway, err, "Error on getting auth token for SIP account")
+			return
+		}
+		c.JSON(http.StatusOK, gin.H{
+			"sipUri": user.SIPURI,
+			"token":  token.Token,
+			"expire": time.Now().Add(time.Duration(token.Expires) * time.Second),
 		})
 	})
 

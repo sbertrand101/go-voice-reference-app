@@ -4,16 +4,18 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
-	"github.com/gin-gonic/gin"
-	"github.com/jinzhu/gorm"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
-	"testing"
 	"strings"
+	"testing"
+
+	"github.com/bandwidthcom/go-bandwidth"
+	"github.com/gin-gonic/gin"
+	"github.com/jinzhu/gorm"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestRouteRegister(t *testing.T) {
@@ -156,14 +158,14 @@ func TestRouteRegisterFailWithFailedCreateSIPAccount(t *testing.T) {
 
 func TestRouteLogin(t *testing.T) {
 	data := gin.H{
-		"userName":       "user1",
-		"password":       "123456",
+		"userName": "user1",
+		"password": "123456",
 	}
 	db := openDBConnection(t)
 	defer db.Close()
 	user := &User{UserName: "user1", AreaCode: "999"}
 	user.SetPassword("123456")
-	assert.NoError(t, db.Create(user).Error);
+	assert.NoError(t, db.Create(user).Error)
 	result := map[string]string{}
 	w := makeRequest(t, nil, db, http.MethodPost, "/login", "", data, &result)
 	assert.Equal(t, http.StatusOK, w.Code)
@@ -173,53 +175,79 @@ func TestRouteLogin(t *testing.T) {
 
 func TestRouteLoginFailWithWrongPassword(t *testing.T) {
 	data := gin.H{
-		"userName":       "user1",
-		"password":       "1234567",
+		"userName": "user1",
+		"password": "1234567",
 	}
 	db := openDBConnection(t)
 	defer db.Close()
 	user := &User{UserName: "user1", AreaCode: "999"}
 	user.SetPassword("123456")
-	assert.NoError(t, db.Create(user).Error);
+	assert.NoError(t, db.Create(user).Error)
 	w := makeRequest(t, nil, db, http.MethodPost, "/login", "", data)
 	assert.Equal(t, http.StatusUnauthorized, w.Code)
 }
 
 func TestRouteLoginFailWithWrongUserName(t *testing.T) {
 	data := gin.H{
-		"userName":       "user2",
-		"password":       "123456",
+		"userName": "user2",
+		"password": "123456",
 	}
 	db := openDBConnection(t)
 	defer db.Close()
 	user := &User{UserName: "user1", AreaCode: "999"}
 	user.SetPassword("123456")
-	assert.NoError(t, db.Create(user).Error);
+	assert.NoError(t, db.Create(user).Error)
 	w := makeRequest(t, nil, db, http.MethodPost, "/login", "", data)
 	assert.Equal(t, http.StatusUnauthorized, w.Code)
 }
 
 func TestRouteRefreshToken(t *testing.T) {
-	data := gin.H{
-		"userName":       "user1",
-		"password":       "123456",
-	}
 	db := openDBConnection(t)
 	defer db.Close()
-	user := &User{UserName: "user1", AreaCode: "999"}
-	user.SetPassword("123456")
-	assert.NoError(t, db.Create(user).Error);
+	token := createUserAndLogin(t, db)
 	result := map[string]string{}
-	w := makeRequest(t, nil, db, http.MethodPost, "/login", "", data, &result)
-	assert.Equal(t, http.StatusOK, w.Code)
-	token := result["token"]
-	result = map[string]string{}
-	w = makeRequest(t, nil, db, http.MethodGet, "/refreshToken", token, data, &result)
+	w := makeRequest(t, nil, db, http.MethodGet, "/refreshToken", token, nil, &result)
 	assert.Equal(t, http.StatusOK, w.Code)
 	assert.NotEmpty(t, result["token"])
 	assert.NotEmpty(t, result["expire"])
 }
 
+func TestRouteSIPData(t *testing.T) {
+	api := &fakeCatapultAPI{}
+	db := openDBConnection(t)
+	defer db.Close()
+	api.On("CreateSIPAuthToken", "789").Return(&bandwidth.DomainEndpointToken{
+		Expires: 10,
+		Token:   "123",
+	}, nil)
+	token := createUserAndLogin(t, db)
+	result := map[string]string{}
+	w := makeRequest(t, api, db, http.MethodGet, "/sipData", token, nil, &result)
+	assert.Equal(t, http.StatusOK, w.Code)
+	api.AssertExpectations(t)
+	assert.Equal(t, "test@test.net", result["sipUri"])
+	assert.Equal(t, "123", result["token"])
+	assert.NotEmpty(t, result["expire"])
+}
+
+func TestRouteSIPDataFail(t *testing.T) {
+	api := &fakeCatapultAPI{}
+	db := openDBConnection(t)
+	defer db.Close()
+	api.On("CreateSIPAuthToken", "789").Return((*bandwidth.DomainEndpointToken)(nil), errors.New("Error"))
+	token := createUserAndLogin(t, db)
+	w := makeRequest(t, api, db, http.MethodGet, "/sipData", token)
+	assert.Equal(t, http.StatusBadGateway, w.Code)
+	api.AssertExpectations(t)
+}
+
+func TestRouteSIPDataFailUnauthorized(t *testing.T) {
+	api := &fakeCatapultAPI{}
+	db := openDBConnection(t)
+	defer db.Close()
+	w := makeRequest(t, api, db, http.MethodGet, "/sipData", "")
+	assert.Equal(t, http.StatusUnauthorized, w.Code)
+}
 
 func makeRequest(t *testing.T, api catapultAPIInterface, db *gorm.DB, method, path, authToken string, body ...interface{}) *httptest.ResponseRecorder {
 	gin.SetMode(gin.TestMode)
@@ -246,8 +274,29 @@ func makeRequest(t *testing.T, api catapultAPIInterface, db *gorm.DB, method, pa
 	}
 	w := httptest.NewRecorder()
 	router.ServeHTTP(w, req)
-	if strings.Contains(w.Header().Get("Content-Type"),"application/json") && len(body) > 1 && body[1] != nil {
+	if strings.Contains(w.Header().Get("Content-Type"), "application/json") && len(body) > 1 && body[1] != nil {
 		json.Unmarshal(w.Body.Bytes(), &body[1])
 	}
 	return w
+}
+
+func createUserAndLogin(t *testing.T, db *gorm.DB) string {
+	data := gin.H{
+		"userName": "user1",
+		"password": "123456",
+	}
+	user := &User{
+		UserName:    "user1",
+		AreaCode:    "999",
+		PhoneNumber: "+1234567890",
+		SIPURI:      "test@test.net",
+		SIPPassword: "654321",
+		EndpointID:  "789",
+	}
+	user.SetPassword("123456")
+	assert.NoError(t, db.Create(user).Error)
+	result := map[string]string{}
+	w := makeRequest(t, nil, db, http.MethodPost, "/login", "", data, &result)
+	assert.Equal(t, http.StatusOK, w.Code)
+	return result["token"]
 }
