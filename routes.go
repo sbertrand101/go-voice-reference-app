@@ -118,11 +118,7 @@ func getRoutes(router *gin.Engine, db *gorm.DB) error {
 		})
 	})
 
-	router.GET("/", authMiddleware.MiddlewareFunc(), func(c *gin.Context) {
-		c.JSON(http.StatusOK, gin.H{
-			"private": "data",
-		})
-	})
+	router.StaticFile("/", "./public/index.html")
 
 	return nil
 }

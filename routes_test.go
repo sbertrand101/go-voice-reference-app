@@ -249,6 +249,11 @@ func TestRouteSIPDataFailUnauthorized(t *testing.T) {
 	assert.Equal(t, http.StatusUnauthorized, w.Code)
 }
 
+func TestRouteIndex(t *testing.T) {
+	w := makeRequest(t, nil, nil, http.MethodGet, "/", "")
+	assert.Equal(t, http.StatusOK, w.Code)
+}
+
 func makeRequest(t *testing.T, api catapultAPIInterface, db *gorm.DB, method, path, authToken string, body ...interface{}) *httptest.ResponseRecorder {
 	gin.SetMode(gin.TestMode)
 	os.Setenv("CATAPULT_USER_ID", "userID")

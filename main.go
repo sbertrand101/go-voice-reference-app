@@ -2,6 +2,7 @@ package main
 
 import (
 	"github.com/gin-gonic/gin"
+	"github.com/gin-gonic/contrib/static"
 	"github.com/jinzhu/gorm"
 	_ "github.com/jinzhu/gorm/dialects/postgres"
 	"os"
@@ -10,6 +11,7 @@ import (
 
 func main() {
 	router := gin.Default()
+	router.NoRoute(static.ServeRoot("/", "./public")) //serve static files for other routes
 	router.Use(catapultMiddleware) // make CatapultAPI available for all routes
 	connectionString := os.Getenv("DATABASE_URI")
 	if connectionString == "" {
