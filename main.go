@@ -10,6 +10,7 @@ import (
 
 func main() {
 	router := gin.Default()
+	router.Use(catapultMiddleware) // make CatapultAPI available for all routes
 	connectionString := os.Getenv("DATABASE_URI")
 	if connectionString == "" {
 		connectionString = "postgresql://postgres@localhost/golang_voice_reference_app?sslmode=disable"

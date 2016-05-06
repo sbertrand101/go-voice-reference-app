@@ -22,11 +22,6 @@ type RegisterForm struct {
 
 func getRoutes(router *gin.Engine, db *gorm.DB) error {
 
-	api, err := getCatapultAPI();
-	if err != nil {
-		return err
-	}
-
 	authMiddleware := &jwt.GinJWTMiddleware{
 		Realm:      "Bandwidth",
 		Key:        []byte("9SbPxeIyvoT3HkIQ19wN9p_e_b6Xb7iJ"),
@@ -58,6 +53,7 @@ func getRoutes(router *gin.Engine, db *gorm.DB) error {
 	router.GET("/refreshToken", authMiddleware.MiddlewareFunc(), authMiddleware.RefreshHandler)
 
 	router.POST("/register", func(c *gin.Context) {
+		api := c.MustGet("catapultAPI").(catapultAPIInterface)
 		form := &RegisterForm{}
 		err := c.Bind(form)
 		if err != nil {
@@ -80,15 +76,20 @@ func getRoutes(router *gin.Engine, db *gorm.DB) error {
 			setError(c, http.StatusBadRequest, err, "User with such name exists already. Try another name.")
 			return
 		}
-		data, err := createPhoneData(c, api, user.AreaCode)
+		phoneNumber, err := api.CreatePhoneNumber(user.AreaCode)
 		if err != nil {
-			setError(c, http.StatusBadGateway, err, "Error on creating phone data: " + err.Error())
+			setError(c, http.StatusBadGateway, err, "Error on creating phone number: " + err.Error())
 			return
 		}
-		user.PhoneNumber = data.PhoneNumber
-		user.SIPURI = data.SipAccount.URI
-		user.SIPPassword = data.SipAccount.Password
-		user.EndpointID = data.SipAccount.EndpointID
+		sipAccount, err := api.CreateSIPAccount()
+		if err != nil {
+			setError(c, http.StatusBadGateway, err, "Error on creating SIP Account: " + err.Error())
+			return
+		}
+		user.PhoneNumber = phoneNumber
+		user.SIPURI = sipAccount.URI
+		user.SIPPassword = sipAccount.Password
+		user.EndpointID = sipAccount.EndpointID
 		if err = db.Save(user).Error; err != nil {
 			setError(c, http.StatusBadGateway, err, "Error on saving user's data")
 			return

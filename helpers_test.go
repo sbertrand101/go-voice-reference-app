@@ -9,8 +9,11 @@ import (
 	"net/http/httptest"
 	"github.com/bandwidthcom/go-bandwidth"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"testing"
 	"github.com/gin-gonic/gin"
+	"github.com/jinzhu/gorm"
+	"os"
 )
 
 
@@ -32,8 +35,8 @@ type RequestHandler struct {
 	StatusCodeToSend int
 }
 
-func startMockCatapultServer(t *testing.T, handlers []RequestHandler) (*httptest.Server, *bandwidth.Client) {
-	api, _ := bandwidth.New("userID", "token", "secret")
+func startMockCatapultServer(t *testing.T, handlers []RequestHandler) (*httptest.Server, *catapultAPI) {
+	client, _ := bandwidth.New("userID", "token", "secret")
 	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		for _, handler := range handlers {
 			if handler.Method == "" {
@@ -70,8 +73,8 @@ func startMockCatapultServer(t *testing.T, handlers []RequestHandler) (*httptest
 		t.Logf("Unhandled request %s %s", r.Method, r.URL.String())
 		w.WriteHeader(http.StatusNotFound)
 	}))
-	api.APIEndPoint = mockServer.URL
-	return mockServer, api
+	client.APIEndPoint = mockServer.URL
+	return mockServer, &catapultAPI{client: client, context: createFakeGinContext()}
 }
 
 func createFakeGinContext() *gin.Context{
@@ -88,4 +91,16 @@ func readText(t *testing.T, r io.Reader) string {
 		return ""
 	}
 	return string(text)
+}
+
+func openDBConnection(t *testing.T) *gorm.DB {
+	connectionString := os.Getenv("DATABASE_URI")
+	if connectionString == "" {
+		connectionString = "postgresql://postgres@localhost/golang_voice_reference_app_test?sslmode=disable"
+	}
+	db, err := gorm.Open("postgres", connectionString)
+	require.NoError(t, err)
+	db.DropTableIfExists(&User{})
+	require.NoError(t, AutoMigrate(db).Error)
+	return db
 }

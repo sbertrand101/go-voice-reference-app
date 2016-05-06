@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"math/rand"
+	"net/http"
 	"os"
 	"time"
 
@@ -12,19 +13,33 @@ import (
 
 const applicationName = "GolangVoiceReferenceApp"
 
-func getCatapultAPI() (*bandwidth.Client, error) {
-	return bandwidth.New(os.Getenv("CATAPULT_USER_ID"), os.Getenv("CATAPULT_API_TOKEN"), os.Getenv("CATAPULT_API_SECRET"))
+type catapultAPI struct {
+	client  *bandwidth.Client
+	context *gin.Context
 }
 
 var applicationID string
 var domainID string
 var domainName string
 
-func getApplicationID(context *gin.Context, api *bandwidth.Client) (string, error) {
+type catapultAPIInterface interface {
+	GetApplicationID() (string, error)
+	GetDomain() (string, string, error)
+	CreatePhoneNumber(areaCode string) (string, error)
+	CreateSIPAccount() (*sipAccount, error)
+	CreateSIPAuthToken(endpointID string) (*bandwidth.DomainEndpointToken, error)
+}
+
+func newCatapultAPI(context *gin.Context) (*catapultAPI, error) {
+	client, err := bandwidth.New(os.Getenv("CATAPULT_USER_ID"), os.Getenv("CATAPULT_API_TOKEN"), os.Getenv("CATAPULT_API_SECRET"))
+	return &catapultAPI{client: client, context: context}, err
+}
+
+func (api *catapultAPI) GetApplicationID() (string, error) {
 	if applicationID != "" {
 		return applicationID, nil
 	}
-	applications, err := api.GetApplications(&bandwidth.GetApplicationsQuery{Size: 1000})
+	applications, err := api.client.GetApplications(&bandwidth.GetApplicationsQuery{Size: 1000})
 	if err != nil {
 		return "", err
 	}
@@ -38,20 +53,20 @@ func getApplicationID(context *gin.Context, api *bandwidth.Client) (string, erro
 		applicationID = application.ID
 		return applicationID, nil
 	}
-	applicationID, err = api.CreateApplication(&bandwidth.ApplicationData{
+	applicationID, err = api.client.CreateApplication(&bandwidth.ApplicationData{
 		Name:               applicationName,
 		AutoAnswer:         true,
 		CallbackHTTPMethod: "POST",
-		IncomingCallURL:    fmt.Sprintf("http://%s/callCallback", context.Request.Header.Get("Host")),
+		IncomingCallURL:    fmt.Sprintf("http://%s/callCallback", api.context.Request.Header.Get("Host")),
 	})
 	return applicationID, err
 }
 
-func getDomain(api *bandwidth.Client) (string, string, error) {
+func (api *catapultAPI) GetDomain() (string, string, error) {
 	if domainID != "" {
 		return domainID, domainName, nil
 	}
-	domains, err := api.GetDomains()
+	domains, err := api.client.GetDomains()
 	if err != nil {
 		return "", "", err
 	}
@@ -68,24 +83,24 @@ func getDomain(api *bandwidth.Client) (string, string, error) {
 		return domainID, domainName, nil
 	}
 	domainName = randomString(15)
-	domainID, err = api.CreateDomain(&bandwidth.CreateDomainData{
+	domainID, err = api.client.CreateDomain(&bandwidth.CreateDomainData{
 		Name:        domainName,
 		Description: description,
 	})
 	return domainID, domainName, err
 }
 
-func createPhoneNumber(context *gin.Context, api *bandwidth.Client, areaCode string) (string, error) {
-	applicationID, err := getApplicationID(context, api)
+func (api *catapultAPI) CreatePhoneNumber(areaCode string) (string, error) {
+	applicationID, err := api.GetApplicationID()
 	if err != nil {
 		return "", err
 	}
-	numbers, err := api.GetAndOrderAvailableNumbers(bandwidth.AvailableNumberTypeLocal,
+	numbers, err := api.client.GetAndOrderAvailableNumbers(bandwidth.AvailableNumberTypeLocal,
 		&bandwidth.GetAvailableNumberQuery{AreaCode: areaCode, Quantity: 1})
 	if err != nil {
 		return "", err
 	}
-	err = api.UpdatePhoneNumber(numbers[0].ID, &bandwidth.UpdatePhoneNumberData{ApplicationID: applicationID})
+	err = api.client.UpdatePhoneNumber(numbers[0].ID, &bandwidth.UpdatePhoneNumberData{ApplicationID: applicationID})
 	if err != nil {
 		return "", err
 	}
@@ -98,23 +113,18 @@ type sipAccount struct {
 	Password   string
 }
 
-type phoneData struct {
-	SipAccount  *sipAccount
-	PhoneNumber string
-}
-
-func createSIPAccount(context *gin.Context, api *bandwidth.Client) (*sipAccount, error) {
-	applicationID, err := getApplicationID(context, api)
+func (api *catapultAPI) CreateSIPAccount() (*sipAccount, error) {
+	applicationID, err := api.GetApplicationID()
 	if err != nil {
 		return nil, err
 	}
-	domainID, domainName, err := getDomain(api)
+	domainID, domainName, err := api.GetDomain()
 	if err != nil {
 		return nil, err
 	}
 	sipUserName := randomString(16)
 	sipPassword := randomString(10)
-	id, err := api.CreateDomainEndpoint(domainID, &bandwidth.DomainEndpointData{
+	id, err := api.client.CreateDomainEndpoint(domainID, &bandwidth.DomainEndpointData{
 		ApplicationID: applicationID,
 		DomainID:      domainID,
 		Name:          sipUserName,
@@ -128,19 +138,22 @@ func createSIPAccount(context *gin.Context, api *bandwidth.Client) (*sipAccount,
 	return &sipAccount{id, sipURI, sipPassword}, nil
 }
 
-func createPhoneData(context *gin.Context, api *bandwidth.Client, areaCode string) (*phoneData, error) {
-	phoneNumber, err := createPhoneNumber(context, api, areaCode)
+func (api *catapultAPI) CreateSIPAuthToken(endpointID string) (*bandwidth.DomainEndpointToken, error) {
+	domainID, _, err := api.GetDomain()
 	if err != nil {
 		return nil, err
 	}
-	account, err := createSIPAccount(context, api)
+	return api.client.CreateDomainEndpointToken(domainID, endpointID)
+}
+
+func catapultMiddleware(c *gin.Context) {
+	api, err := newCatapultAPI(c)
 	if err != nil {
-		return nil, err
+		c.AbortWithError(http.StatusInternalServerError, err)
+		return
 	}
-	return &phoneData{
-		PhoneNumber: phoneNumber,
-		SipAccount:  account,
-	}, nil
+	c.Set("catapultAPI", api)
+	c.Next()
 }
 
 var randomString = func(strlen int) string {

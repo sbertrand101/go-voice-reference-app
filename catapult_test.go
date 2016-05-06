@@ -8,24 +8,21 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestGetCatapultApi(t *testing.T) {
+func TestNewCatapultApi(t *testing.T) {
 	os.Setenv("CATAPULT_USER_ID", "UserID")
 	os.Setenv("CATAPULT_API_TOKEN", "Token")
 	os.Setenv("CATAPULT_API_SECRET", "Secret")
-	api, _ := getCatapultAPI()
-	assert.Equal(t, "UserID", api.UserID)
-	assert.Equal(t, "Token", api.APIToken)
-	assert.Equal(t, "Secret", api.APISecret)
-	os.Unsetenv("CATAPULT_USER_ID")
-	os.Unsetenv("CATAPULT_API_TOKEN")
-	os.Unsetenv("CATAPULT_API_SECRET")
+	api, _ := newCatapultAPI(nil)
+	assert.Equal(t, "UserID", api.client.UserID)
+	assert.Equal(t, "Token", api.client.APIToken)
+	assert.Equal(t, "Secret", api.client.APISecret)
 }
 
 func TestGetCatapultApiFail(t *testing.T) {
 	os.Unsetenv("CATAPULT_USER_ID")
 	os.Unsetenv("CATAPULT_API_TOKEN")
 	os.Unsetenv("CATAPULT_API_SECRET")
-	_, err := getCatapultAPI()
+	_, err := newCatapultAPI(nil)
 	assert.Error(t, err)
 }
 
@@ -45,7 +42,7 @@ func TestGetApplicationIDWithNewApplication(t *testing.T) {
 		},
 	})
 	defer server.Close()
-	id, _ := getApplicationID(createFakeGinContext(), api)
+	id, _ := api.GetApplicationID()
 	assert.Equal(t, "123", id)
 }
 
@@ -59,7 +56,7 @@ func TestGetApplicationIDWithExistingApplication(t *testing.T) {
 		},
 	})
 	defer server.Close()
-	id, _ := getApplicationID(createFakeGinContext(), api)
+	id, _ := api.GetApplicationID()
 	assert.Equal(t, "0123", id)
 }
 
@@ -72,12 +69,12 @@ func TestGetApplicationIDRepeating(t *testing.T) {
 			ContentToSend: `[{"name": "GolangVoiceReferenceApp", "id": "1234"}]`,
 		},
 	})
-	id, _ := getApplicationID(createFakeGinContext(), api)
+	id, _ := api.GetApplicationID()
 	server.Close()
 	assert.Equal(t, "1234", id)
-	id, _ = getApplicationID(createFakeGinContext(), api)
+	id, _ = api.GetApplicationID()
 	assert.Equal(t, "1234", id)
-	id, _ = getApplicationID(createFakeGinContext(), api)
+	id, _ = api.GetApplicationID()
 	assert.Equal(t, "1234", id)
 }
 
@@ -91,7 +88,7 @@ func TestGetApplicationIDFail(t *testing.T) {
 		},
 	})
 	defer server.Close()
-	_, err := getApplicationID(createFakeGinContext(), api)
+	_, err := api.GetApplicationID()
 	assert.Error(t, err)
 }
 
@@ -113,7 +110,7 @@ func TestGetDomainWithNewDomain(t *testing.T) {
 	useMockRandomString()
 	defer restoreRandomString()
 	defer server.Close()
-	id, name, _ := getDomain(api)
+	id, name, _ := api.GetDomain()
 	assert.Equal(t, "123", id)
 	assert.Equal(t, "random", name)
 }
@@ -128,7 +125,7 @@ func TestGetDomainWithExistingDomain(t *testing.T) {
 		},
 	})
 	defer server.Close()
-	id, name, _ := getDomain(api)
+	id, name, _ := api.GetDomain()
 	assert.Equal(t, "0123", id)
 	assert.Equal(t, "domain", name)
 }
@@ -142,12 +139,12 @@ func TestGetDomainRepeating(t *testing.T) {
 			ContentToSend: `[{"name": "domain1", "id": "1234", "description": "GolangVoiceReferenceApp's domain"}]`,
 		},
 	})
-	id, _, _ := getDomain(api)
+	id, _, _ := api.GetDomain()
 	server.Close()
 	assert.Equal(t, "1234", id)
-	id, _, _ = getDomain(api)
+	id, _, _ = api.GetDomain()
 	assert.Equal(t, "1234", id)
-	id, name, _ := getDomain(api)
+	id, name, _ := api.GetDomain()
 	assert.Equal(t, "1234", id)
 	assert.Equal(t, "domain1", name)
 }
@@ -162,7 +159,7 @@ func TestGetDomainFail(t *testing.T) {
 		},
 	})
 	defer server.Close()
-	_, _, err := getDomain(api)
+	_, _, err := api.GetDomain()
 	assert.Error(t, err)
 }
 
@@ -181,7 +178,7 @@ func TestCreatePhoneNumber(t *testing.T) {
 		},
 	})
 	defer server.Close()
-	phoneNumber, _ := createPhoneNumber(createFakeGinContext(), api, "910")
+	phoneNumber, _ := api.CreatePhoneNumber("910")
 	assert.Equal(t, "+1234567890", phoneNumber)
 }
 
@@ -195,7 +192,7 @@ func TestCreatePhoneNumberFail(t *testing.T) {
 		},
 	})
 	defer server.Close()
-	_, err := createPhoneNumber(createFakeGinContext(), api, "910")
+	_, err := api.CreatePhoneNumber("910")
 	assert.Error(t, err)
 }
 
@@ -209,7 +206,7 @@ func TestCreatePhoneNumberFail2(t *testing.T) {
 		},
 	})
 	defer server.Close()
-	_, err := createPhoneNumber(createFakeGinContext(), api, "910")
+	_, err := api.CreatePhoneNumber("910")
 	assert.Error(t, err)
 }
 
@@ -228,7 +225,7 @@ func TestCreatePhoneNumberFail3(t *testing.T) {
 		},
 	})
 	defer server.Close()
-	_, err := createPhoneNumber(createFakeGinContext(), api, "910")
+	_, err := api.CreatePhoneNumber("910")
 	assert.Error(t, err)
 }
 
@@ -247,7 +244,7 @@ func TestCreateSIPAccount(t *testing.T) {
 	useMockRandomString()
 	defer server.Close()
 	defer restoreRandomString()
-	account, _ := createSIPAccount(createFakeGinContext(), api)
+	account, _ := api.CreateSIPAccount()
 	assert.EqualValues(t, &sipAccount{
 		EndpointID: "567",
 	    URI: "sip:random@domain1.bwapp.bwsip.io",
@@ -269,7 +266,7 @@ func TestCreateSIPAccountFail(t *testing.T) {
 	useMockRandomString()
 	defer server.Close()
 	defer restoreRandomString()
-	_, err := createSIPAccount(createFakeGinContext(), api)
+	_, err := api.CreateSIPAccount()
 	assert.Error(t, err)
 }
 
@@ -285,7 +282,7 @@ func TestCreateSIPAccountFail2(t *testing.T) {
 		},
 	})
 	defer server.Close()
-	_, err := createSIPAccount(createFakeGinContext(), api)
+	_, err := api.CreateSIPAccount()
 	assert.Error(t, err)
 }
 
@@ -301,87 +298,77 @@ func TestCreateSIPAccountFail3(t *testing.T) {
 		},
 	})
 	defer server.Close()
-	_, err := createSIPAccount(createFakeGinContext(), api)
+	_, err := api.CreateSIPAccount()
 	assert.Error(t, err)
 }
 
-func TestCreatePhoneData(t *testing.T) {
-	applicationID = "123"
-	domainID = "456"
-	domainName = "domain1"
+func TestCreateSIPAuthToken(t *testing.T) {
+	domainID = "123"
 	server, api := startMockCatapultServer(t, []RequestHandler{
 		RequestHandler{
-			PathAndQuery:  "/v1/availableNumbers/local?areaCode=910&quantity=1",
+			PathAndQuery:  "/v1/users/userID/domains/123/endpoints/456/tokens",
 			Method:        http.MethodPost,
-			ContentToSend: `[{"number": "+1234567890", "location": "/v1/users/userID/phoneNumbers/1234"}]`,
-		},
-		RequestHandler{
-			PathAndQuery:     "/v1/users/userID/phoneNumbers/1234",
-			Method:           http.MethodPost,
-			EstimatedContent: `{"applicationId":"123"}`,
-		},
-		RequestHandler{
-			PathAndQuery:  "/v1/users/userID/domains/456/endpoints",
-			Method:        http.MethodPost,
-			EstimatedContent: `{"name":"random","description":"GolangVoiceReferenceApp's SIP Account","domainId":"456","applicationId":"123","credentials":{"password":"random"}}`,
-			HeadersToSend:    map[string]string{"Location": "/v1/users/userID/domains/456/endpoints/567"},
+			ContentToSend: `{"token": "token"}`,
 		},
 	})
-	useMockRandomString()
 	defer server.Close()
-	defer restoreRandomString()
-	account, _ := createPhoneData(createFakeGinContext(), api, "910")
-	assert.EqualValues(t, &phoneData{
-		PhoneNumber: "+1234567890",
-		SipAccount: &sipAccount{
-			EndpointID: "567",
-	    	URI: "sip:random@domain1.bwapp.bwsip.io",
-			Password: "random",
-		},
-	}, account)
+	token, _ := api.CreateSIPAuthToken("456")
+	assert.Equal(t, "token", token.Token)
 }
 
-func TestCreatePhoneDataFail(t *testing.T) {
-	applicationID = "123"
-	domainID = "456"
-	domainName = "domain2"
+func TestCreateSIPAuthTokenFail(t *testing.T) {
+	domainID = "123"
 	server, api := startMockCatapultServer(t, []RequestHandler{
 		RequestHandler{
-			PathAndQuery:  "/v1/availableNumbers/local?areaCode=910&quantity=1",
-			Method:        http.MethodPost,
-			ContentToSend: `[{"number": "+1234567890", "location": "/v1/users/userID/phoneNumbers/1234"}]`,
-		},
-		RequestHandler{
-			PathAndQuery:     "/v1/users/userID/phoneNumbers/1234",
-			Method:           http.MethodPost,
-			EstimatedContent: `{"applicationId":"123"}`,
-		},
-		RequestHandler{
-			PathAndQuery:  "/v1/users/userID/domains/456/endpoints",
+			PathAndQuery:  "/v1/users/userID/domains/123/endpoints/456/tokens",
 			Method:        http.MethodPost,
 			StatusCodeToSend: http.StatusBadRequest,
 		},
 	})
 	defer server.Close()
-	_, err := createPhoneData(createFakeGinContext(), api, "910")
+	_, err := api.CreateSIPAuthToken("456")
 	assert.Error(t, err)
 }
 
-func TestCreatePhoneDataFail2(t *testing.T) {
-	applicationID = "123"
-	domainID = "456"
-	domainName = "domain3"
+func TestCreateSIPAuthTokenFail2(t *testing.T) {
+	domainID = ""
 	server, api := startMockCatapultServer(t, []RequestHandler{
 		RequestHandler{
-			PathAndQuery:  "/v1/availableNumbers/local?areaCode=910&quantity=1",
-			Method:        http.MethodPost,
+			PathAndQuery:  "/v1/users/userID/domains",
+			Method:        http.MethodGet,
 			StatusCodeToSend: http.StatusBadRequest,
 		},
 	})
 	defer server.Close()
-	_, err := createPhoneData(createFakeGinContext(), api, "910")
+	_, err := api.CreateSIPAuthToken("456")
 	assert.Error(t, err)
 }
+
+func TestCatapultMiddleware(t *testing.T) {
+	os.Setenv("CATAPULT_USER_ID", "UserID")
+	os.Setenv("CATAPULT_API_TOKEN", "Token")
+	os.Setenv("CATAPULT_API_SECRET", "Secret")
+	context := createFakeGinContext()
+	catapultMiddleware(context)
+	instance := context.MustGet("catapultAPI")
+	assert.NotNil(t, instance)
+	assert.NotNil(t, instance.(catapultAPIInterface))
+}
+
+func TestCatapultMiddlewareFail(t *testing.T) {
+	os.Unsetenv("CATAPULT_USER_ID")
+	os.Unsetenv("CATAPULT_API_TOKEN")
+	os.Unsetenv("CATAPULT_API_SECRET")
+	context := createFakeGinContext()
+	defer func() {
+		_, ok := context.Get("catapultAPI")
+		assert.False(t, ok)
+		r := recover()
+		assert.NotNil(t, r)
+	}()
+	catapultMiddleware(context)
+}
+
 
 func TestRandomString(t *testing.T) {
 	assert.Equal(t, 10, len(randomString(10)))

@@ -3,8 +3,6 @@ package main
 import (
 	"testing"
 	"github.com/stretchr/testify/assert"
-	"os"
-	"github.com/jinzhu/gorm"
 )
 
 func TestUserSetPassword(t *testing.T) {
@@ -29,13 +27,7 @@ func TestUserComparePasswords(t *testing.T) {
 }
 
 func TestAutoMigrate(t *testing.T) {
-	connectionString := os.Getenv("DATABASE_URI")
-	if connectionString == "" {
-		connectionString = "postgresql://postgres@localhost/golang_voice_reference_app_test?sslmode=disable"
-	}
-	db, err := gorm.Open("postgres", connectionString)
-	assert.NoError(t, err)
-	db.DropTableIfExists(&User{})
+	db := openDBConnection(t)
 	assert.NoError(t, AutoMigrate(db).Error)
 	assert.True(t, db.HasTable(&User{}))
 }
