@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/gin-gonic/gin"
 )
 
 func TestNewCatapultApi(t *testing.T) {
@@ -360,6 +361,7 @@ func TestCatapultMiddlewareFail(t *testing.T) {
 	os.Unsetenv("CATAPULT_API_TOKEN")
 	os.Unsetenv("CATAPULT_API_SECRET")
 	context := createFakeGinContext()
+	gin.SetMode(gin.TestMode)
 	defer func() {
 		_, ok := context.Get("catapultAPI")
 		assert.False(t, ok)
