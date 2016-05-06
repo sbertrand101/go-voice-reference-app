@@ -29,7 +29,7 @@ func getRoutes(router *gin.Engine, db *gorm.DB) error {
 		MaxRefresh: time.Hour * 24,
 		Authenticator: func(userId string, password string, c *gin.Context) (string, bool) {
 			user := &User{}
-			if db.First(user, "UserName = ?", userId).RecordNotFound() {
+			if db.First(user, "user_name = ?", userId).RecordNotFound() {
 				return "", false
 			}
 			return strconv.FormatUint(uint64(user.ID), 10), user.ComparePasswords(password)
@@ -60,6 +60,10 @@ func getRoutes(router *gin.Engine, db *gorm.DB) error {
 			setError(c, http.StatusBadRequest, err)
 			return
 		}
+		if form.UserName == "" || form.Password == "" || form.AreaCode == "" {
+			setError(c, http.StatusBadRequest, errors.New("Missing some required fields"))
+			return
+		}
 		if form.Password != form.RepeatPassword {
 			setError(c, http.StatusBadRequest, errors.New("Passwords are mismatched"))
 			return
@@ -72,8 +76,8 @@ func getRoutes(router *gin.Engine, db *gorm.DB) error {
 			setError(c, http.StatusBadRequest, err)
 			return
 		}
-		if err = db.Create(user).Error; err != nil {
-			setError(c, http.StatusBadRequest, err, "User with such name exists already. Try another name.")
+		if !db.First(&User{}, "user_name = ?", form.UserName).RecordNotFound() {
+			setError(c, http.StatusBadRequest, errors.New("User with such name is registered already"))
 			return
 		}
 		phoneNumber, err := api.CreatePhoneNumber(user.AreaCode)
@@ -90,7 +94,7 @@ func getRoutes(router *gin.Engine, db *gorm.DB) error {
 		user.SIPURI = sipAccount.URI
 		user.SIPPassword = sipAccount.Password
 		user.EndpointID = sipAccount.EndpointID
-		if err = db.Save(user).Error; err != nil {
+		if err = db.Create(user).Error; err != nil {
 			setError(c, http.StatusBadGateway, err, "Error on saving user's data")
 			return
 		}

@@ -10,6 +10,7 @@ import (
 	"github.com/bandwidthcom/go-bandwidth"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/stretchr/testify/mock"
 	"testing"
 	"github.com/gin-gonic/gin"
 	"github.com/jinzhu/gorm"
@@ -103,4 +104,33 @@ func openDBConnection(t *testing.T) *gorm.DB {
 	db.DropTableIfExists(&User{})
 	require.NoError(t, AutoMigrate(db).Error)
 	return db
+}
+
+type fakeCatapultAPI struct{
+  mock.Mock
+}
+
+func (m *fakeCatapultAPI) GetApplicationID() (string, error) {
+	args := m.Called()
+	return args.String(0), args.Error(1)
+}
+
+func (m *fakeCatapultAPI) GetDomain() (string, string, error) {
+	args := m.Called()
+	return args.String(0), args.String(1), args.Error(2)
+}
+
+func (m *fakeCatapultAPI) CreatePhoneNumber(areaCode string) (string, error) {
+	args := m.Called(areaCode)
+	return args.String(0), args.Error(1)
+}
+
+func (m *fakeCatapultAPI) CreateSIPAccount() (*sipAccount, error) {
+	args := m.Called()
+	return args.Get(0).(*sipAccount), args.Error(1)
+}
+
+func (m *fakeCatapultAPI) CreateSIPAuthToken(endpointID string) (*bandwidth.DomainEndpointToken, error) {
+	args := m.Called(endpointID)
+	return args.Get(0).(*bandwidth.DomainEndpointToken), args.Error(1)
 }

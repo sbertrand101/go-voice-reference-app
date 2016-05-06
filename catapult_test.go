@@ -5,8 +5,8 @@ import (
 	"os"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
 	"github.com/gin-gonic/gin"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestNewCatapultApi(t *testing.T) {
@@ -236,8 +236,8 @@ func TestCreateSIPAccount(t *testing.T) {
 	domainName = "domain1"
 	server, api := startMockCatapultServer(t, []RequestHandler{
 		RequestHandler{
-			PathAndQuery:  "/v1/users/userID/domains/456/endpoints",
-			Method:        http.MethodPost,
+			PathAndQuery:     "/v1/users/userID/domains/456/endpoints",
+			Method:           http.MethodPost,
 			EstimatedContent: `{"name":"random","description":"GolangVoiceReferenceApp's SIP Account","domainId":"456","applicationId":"123","credentials":{"password":"random"}}`,
 			HeadersToSend:    map[string]string{"Location": "/v1/users/userID/domains/456/endpoints/567"},
 		},
@@ -248,8 +248,8 @@ func TestCreateSIPAccount(t *testing.T) {
 	account, _ := api.CreateSIPAccount()
 	assert.EqualValues(t, &sipAccount{
 		EndpointID: "567",
-	    URI: "sip:random@domain1.bwapp.bwsip.io",
-		Password: "random",
+		URI:        "sip:random@domain1.bwapp.bwsip.io",
+		Password:   "random",
 	}, account)
 }
 
@@ -259,8 +259,8 @@ func TestCreateSIPAccountFail(t *testing.T) {
 	domainName = "domain2"
 	server, api := startMockCatapultServer(t, []RequestHandler{
 		RequestHandler{
-			PathAndQuery:  "/v1/users/userID/domains/456/endpoints",
-			Method:        http.MethodPost,
+			PathAndQuery:     "/v1/users/userID/domains/456/endpoints",
+			Method:           http.MethodPost,
 			StatusCodeToSend: http.StatusBadRequest,
 		},
 	})
@@ -277,8 +277,8 @@ func TestCreateSIPAccountFail2(t *testing.T) {
 	domainName = ""
 	server, api := startMockCatapultServer(t, []RequestHandler{
 		RequestHandler{
-			PathAndQuery:  "/v1/users/userID/domains",
-			Method:        http.MethodGet,
+			PathAndQuery:     "/v1/users/userID/domains",
+			Method:           http.MethodGet,
 			StatusCodeToSend: http.StatusBadRequest,
 		},
 	})
@@ -293,8 +293,8 @@ func TestCreateSIPAccountFail3(t *testing.T) {
 	domainName = ""
 	server, api := startMockCatapultServer(t, []RequestHandler{
 		RequestHandler{
-			PathAndQuery:  "/v1/users/userID/applications",
-			Method:        http.MethodGet,
+			PathAndQuery:     "/v1/users/userID/applications",
+			Method:           http.MethodGet,
 			StatusCodeToSend: http.StatusBadRequest,
 		},
 	})
@@ -321,8 +321,8 @@ func TestCreateSIPAuthTokenFail(t *testing.T) {
 	domainID = "123"
 	server, api := startMockCatapultServer(t, []RequestHandler{
 		RequestHandler{
-			PathAndQuery:  "/v1/users/userID/domains/123/endpoints/456/tokens",
-			Method:        http.MethodPost,
+			PathAndQuery:     "/v1/users/userID/domains/123/endpoints/456/tokens",
+			Method:           http.MethodPost,
 			StatusCodeToSend: http.StatusBadRequest,
 		},
 	})
@@ -335,8 +335,8 @@ func TestCreateSIPAuthTokenFail2(t *testing.T) {
 	domainID = ""
 	server, api := startMockCatapultServer(t, []RequestHandler{
 		RequestHandler{
-			PathAndQuery:  "/v1/users/userID/domains",
-			Method:        http.MethodGet,
+			PathAndQuery:     "/v1/users/userID/domains",
+			Method:           http.MethodGet,
 			StatusCodeToSend: http.StatusBadRequest,
 		},
 	})
@@ -370,7 +370,6 @@ func TestCatapultMiddlewareFail(t *testing.T) {
 	}()
 	catapultMiddleware(context)
 }
-
 
 func TestRandomString(t *testing.T) {
 	assert.Equal(t, 10, len(randomString(10)))
