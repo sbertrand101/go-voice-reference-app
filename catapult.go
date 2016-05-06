@@ -144,7 +144,7 @@ func createPhoneData(context *gin.Context, api *bandwidth.Client, areaCode strin
 }
 
 var randomString = func(strlen int) string {
-	rand.Seed(time.Now().UTC().UnixNano())
+	rand.Seed(time.Now().UTC().UnixNano() + rand.Int63())
 	const chars = "abcdefghijklmnopqrstuvwxyz0123456789"
 	result := make([]byte, strlen)
 	for i := 0; i < strlen; i++ {

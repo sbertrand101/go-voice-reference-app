@@ -386,7 +386,7 @@ func TestCreatePhoneDataFail2(t *testing.T) {
 func TestRandomString(t *testing.T) {
 	assert.Equal(t, 10, len(randomString(10)))
 	assert.Equal(t, 16, len(randomString(16)))
-	assert.Equal(t, randomString(32), randomString(32))
+	assert.NotEqual(t, randomString(32), randomString(32))
 }
 
 var originalRandomString = randomString
