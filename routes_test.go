@@ -199,6 +199,27 @@ func TestRouteLoginFailWithWrongUserName(t *testing.T) {
 	assert.Equal(t, http.StatusUnauthorized, w.Code)
 }
 
+func TestRouteRefreshToken(t *testing.T) {
+	data := gin.H{
+		"userName":       "user1",
+		"password":       "123456",
+	}
+	db := openDBConnection(t)
+	defer db.Close()
+	user := &User{UserName: "user1", AreaCode: "999"}
+	user.SetPassword("123456")
+	assert.NoError(t, db.Create(user).Error);
+	result := map[string]string{}
+	w := makeRequest(t, nil, db, http.MethodPost, "/login", "", data, &result)
+	assert.Equal(t, http.StatusOK, w.Code)
+	token := result["token"]
+	result = map[string]string{}
+	w = makeRequest(t, nil, db, http.MethodGet, "/refreshToken", token, data, &result)
+	assert.Equal(t, http.StatusOK, w.Code)
+	assert.NotEmpty(t, result["token"])
+	assert.NotEmpty(t, result["expire"])
+}
+
 
 func makeRequest(t *testing.T, api catapultAPIInterface, db *gorm.DB, method, path, authToken string, body ...interface{}) *httptest.ResponseRecorder {
 	gin.SetMode(gin.TestMode)
