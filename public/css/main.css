@@ -1,0 +1,56 @@
+html, body, #body>div {
+  height: 100%;
+}
+
+body, #body, #body>div {
+	display: flex;
+	flex-direction: column;
+}
+
+.bw-body, .bw-body-content {
+	display: block;
+}
+
+#body, #body>div {
+  flex-grow: 1;
+}
+
+.fill-free-space {
+	flex-grow: 1;
+}
+
+
+.well {
+	background: #F6FBFE;
+	padding: 16px;
+	border-radius: 8px;
+}
+
+.form-buttons {
+	margin-top: 10px;
+}
+
+.form-buttons button {
+	margin-left: 2px;
+}
+.form-buttons button:first-child {
+	margin-left: 0px;
+}
+
+.error {
+	color: red;
+	padding-top: 10px;
+}
+
+.success {
+	color: green;
+	padding-top: 10px;
+}
+
+.register-link{
+	margin-top: 50px;
+}
+
+.inline-link {
+	display: inline-block !important;
+}
