@@ -3,19 +3,22 @@
 	<head>
 		<title>Voice Reference App</title>
 		<meta name=viewport content="width=device-width, initial-scale=1">
+		<link rel="stylesheet" href="//maxcdn.bootstrapcdn.com/font-awesome/4.3.0/css/font-awesome.min.css"/>
 		<link rel="stylesheet" href="/css/buxstrap.css"/>
 		<link rel="stylesheet" href="/css/style.css"/>
 		<link rel="stylesheet" href="/css/main.css"/>
 	</head>
 	<body>
+		<audio id="incomingCallAudio" src="https://code.bandwidth.com/media/incoming_alert.mp3" loop preload="auto"></audio>
 		<header class="bw-header">
 			<div class="bw-header-content">
 				<img class="bw-logo" src="//s3.amazonaws.com/bandwidth-public-assets/bw_logo_white.svg"/>
-				<h1 class="bw-title">Voice Reference App</h1>
+				<h1 class="bw-title">Phone</h1>
 			</div>
 		</header>
 		<div class="bw-body">
 			<div class="bw-body-content">
+				<div class="error" hidden></div>
 				<section className="formContainer" id="loginForm" hidden>
 					<form className="basicForm fill-free-space">
 						<h1>Sign In</h1>
@@ -62,6 +65,57 @@
 					</form>
 				</section>
 				<section id="phone" hidden>
+					<div id="incomingCall" hidden>
+						<div class="callInfo">
+							<h3>Incoming Call</h3>
+							<p id="incomingCallNumber">Unknown</p>
+						</div>
+						<div id="answer"> <i class="fa fa-phone"></i></div>
+						<div id="reject"> <i class="fa fa-phone"></i></div>
+					</div>
+					<div id="callStatus" hidden>
+						<div class="callInfo">
+							<h3 id="callInfoText">info text goes here</h3>
+							<p id="callInfoNumber">info number goes here</p>
+						</div>
+						<div id="hangUp"> <i class="fa fa-phone"></i>
+						</div>
+					</div>
+					<!---------TO FIELD---------------------------------------------------->
+					<!---------DIALPAD---------------------------------------------------->
+					<div id="inCallButtons" hidden>
+						<div id="dialPad">
+
+							<div class="dialpad-char" data-value="1" unselectable="on">1</div>
+							<div class="dialpad-char" data-value="2" unselectable="on">2</div>
+							<div class="dialpad-char" data-value="3" unselectable="on">3</div>
+							<div class="dialpad-char" data-value="4" unselectable="on">4</div>
+							<div class="dialpad-char" data-value="5" unselectable="on">5</div>
+							<div class="dialpad-char" data-value="6" unselectable="on">6</div>
+							<div class="dialpad-char" data-value="7" unselectable="on">7</div>
+							<div class="dialpad-char" data-value="8" unselectable="on">8</div>
+							<div class="dialpad-char" data-value="9" unselectable="on">9</div>
+							<div class="dialpad-char" data-value="*" unselectable="on">*</div>
+							<div class="dialpad-char" data-value="0" unselectable="on">0</div>
+							<div class="dialpad-char" data-value="#" unselectable="on">#</div>
+						</div>
+						<div id="mute">
+							<i id="muteIcon" class="fa fa-microphone"></i>
+						</div>
+					</div>
+
+					<!---------DIAL CONTROLS-------------------------------------------->
+					<div id="callControl">
+						<div id="phoneNumber">
+						</div>
+						<input id="toField" type="text" placeholder="Enter number here"/>
+						<div id="connectCall">
+							<i class="fa fa-phone"></i>
+						</div>
+					</div>
+				</section>
+				<section id="connecting" class="centered" hidden>
+					<img src="/css/images/load.gif" alt="Connecting..." >
 				</section>
 			</div>
 		</div>

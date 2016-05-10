@@ -1,10 +1,25 @@
+HTMLElement.prototype.show = function(){
+	this.removeAttribute('hidden');
+}
+
+HTMLElement.prototype.hide = function(){
+	this.setAttribute('hidden', 'hidden');
+}
+
 var authData = JSON.parse(localStorage.getItem('authData') || '{}');
 
 var loginForm = document.getElementById('loginForm');
 var registerForm = document.getElementById('registerForm');
 var phoneContainer = document.getElementById('phone');
+var connecting = document.getElementById('connecting');
 
-var screens = [loginForm, registerForm, phoneContainer];
+var screens = [loginForm, registerForm, connecting, phoneContainer];
+
+var incomingCallAudio = document.getElementById('incomingCallAudio');
+var toField = document.getElementById('toField');
+var phoneNumber = document.getElementById('phoneNumber');
+
+var phone, session, sipAuthHeader, callOptions;
 
 loginForm.getElementsByTagName('a')[0].addEventListener('click', function(e){
 	e.preventDefault();
@@ -16,7 +31,8 @@ loginForm.getElementsByTagName('form')[0].addEventListener('submit', function(e)
 	var button = e.target.getElementsByTagName('button')[0];
 	button.setAttribute('disabled', 'disabled');
 	login(e.target.elements['userName'].value, e.target.elements['password'].value)
-	.then(saveAuthData, function(err){
+	.then(saveAuthData)
+	.then(start, function(err){
 		setError(loginForm, err);
 		button.removeAttribute('disabled');
 	});
@@ -44,12 +60,54 @@ registerForm.getElementsByTagName('form')[0].addEventListener('submit', function
 	.then(function(){
 		return login(fields['userName'].value, fields['password'].value);
 	})
-	.then(saveAuthData, function(err){
+	.then(saveAuthData)
+	.then(start, function(err){
 		setError(registerForm, err);
 		button.removeAttribute('disabled');
 	});
 });
 
+function makeCall(){
+	if (!toField.value) {
+		return;
+	}
+	phone.call(toField.value, callOptions);
+    updateDialerUI();
+}
+
+document.getElementById('connectCall').addEventListener('click', makeCall);
+
+document.getElementById('answer').addEventListener('click', function(){
+    session.answer(callOptions);
+});
+
+document.getElementById('hangUp').addEventListener('click', hangup);
+document.getElementById('reject').addEventListener('click', hangup);
+
+document.getElementById('mute').addEventListener('click', function(){
+    console.log('MUTE CLICKED');
+    if(session.isMuted().audio){
+        session.unmute({audio: true});
+    }
+	else{
+        session.mute({audio: true});
+    }
+    updateDialerUI();
+});
+
+toField.addEventListener('keypress', function(e){
+    if(e.which === 13){//enter
+        makeCall();
+    }
+});
+
+var i, buttons = document.getElementById('inCallButtons').getElementsByClassName('dialpad-char');
+for(i = 0; i < buttons.length; i ++) {
+	var button = buttons[i];
+	button.addEventListener('click', function (e) {
+		session.sendDTMF(button.getAttribute('data-value'));
+	});
+};
 
 function login(userName, password) {
 	return fetch('/login', {
@@ -66,24 +124,25 @@ function login(userName, password) {
 function saveAuthData(body) {
 	authData = body;
 	localStorage.setItem('authData', JSON.stringify(authData));
-	switchToScreen(phoneContainer);
 }
 
 function switchToScreen(screen) {
 	screens.forEach(function(s){
-		s.setAttribute('hidden', 'hidden');
+		s.hide();
 	});
-	screen.removeAttribute('hidden');
+	if (screen) {
+		screen.show();
+	}
 }
 
 function setError(element, err) {
 	var error = element.getElementsByClassName('error')[0];
 	if (err) {
 		error.textContent = err.message || err;
-		error.removeAttribute('hidden');
+		error.show();
 	}
 	else {
-		error.setAttribute('hidden', 'hidden');
+		error.hide();
 	}
 }
 
@@ -98,6 +157,153 @@ function checkResponse(result) {
 	});
 }
 
-document.addEventListener('DOMContentLoaded', function(){
-	switchToScreen(loginForm);
-})
+function authed(fn) {
+	if (!authData.expire || !authData.token) {
+		return switchToScreen(loginForm);
+	}
+	return refreshAuthData().then(function(){
+		fn();
+	}, function(err){
+		setError(document, err);
+		switchToScreen(loginForm);
+	});
+}
+
+function refreshAuthData() {
+	return fetch('/refreshToken', {
+		headers: {
+			'Authorization': 'Bearer ' + authData.token
+		}
+	})
+	.then(checkResponse)
+	.then(saveAuthData);
+}
+
+function setupPhone(sipData) {
+	sipAuthHeader = 'X-Callsign-Token: ' + sipData.token;
+	callOptions = {
+		extraHeaders: [sipAuthHeader],
+		mediaConstraints: {
+			audio: true,
+			video: false
+		}
+	};
+	if (phone) {
+		phone.stop();
+	}
+	JsSIP.debug.enable('JsSIP:*');
+	phone = new JsSIP.UA({
+		'uri': sipData.sipUri,
+		'ws_servers': 'wss://webrtc.registration.bandwidth.com:10443',
+	});
+	phone.registrator().setExtraHeaders([sipAuthHeader]);
+
+	phone.on('registered', function(){
+		switchToScreen(phoneContainer);
+		toField.focus();
+		setError(document, null);
+	});
+
+	phone.on('registrationFailed', function(e){
+		setError(document, e.cause);
+		switchToScreen(null);
+	});
+
+	phone.on('newRTCSession', function(data){
+		setSession(data.session);
+		if (session.direction === 'incoming') {
+			incomingCallAudio.play();
+		}
+	});
+	switchToScreen(connecting);
+	phone.start();
+	phoneNumber.innerHTML = sipData.phoneNumber;
+}
+
+function setSession(s) {
+	if (session === s) {
+		return;
+	}
+	incomingCallAudio.pause();
+	hangup();
+	session = s;
+	if (session) {
+		session.on('ended', function(){
+			setSession(null);
+		});
+		session.on('failed', function(){
+			setSession(null);
+		});
+		session.on('accepted', function(){
+			incomingCallAudio.pause();
+			updateDialerUI();
+		});
+		session.on('confirmed', function(){
+			updateDialerUI();
+		});
+	}
+	updateDialerUI();
+}
+
+function hangup() {
+	if (session && !session.isEnded()) {
+		session.terminate({extraHeaders: [sipAuthHeader]});
+	}
+}
+
+function updateDialerUI(){
+	if(session){
+		if(session.isInProgress()){
+			if(session.direction === 'incoming'){
+				document.getElementById('incomingCallNumber').innerHTML = session.remote_identity.uri;
+				document.getElementById('incomingCall').show();
+				document.getElementById('callControl').hide();
+				document.getElementById('incomingCall').show();
+			}else{
+				document.getElementById('callInfoText').innerHTML = 'Ringing...';
+				document.getElementById('callInfoNumber').innerHTML = session.remote_identity.uri.user;
+				document.getElementById('callStatus').show();
+			}
+
+		}else if(session.isEstablished()){
+			document.getElementById('callStatus').show();
+			document.getElementById('incomingCall').hide();
+			document.getElementById('callInfoText').innerHTML = 'In Call';
+			document.getElementById('callInfoNumber').innerHTML = session.remote_identity.uri.user;
+			document.getElementById('inCallButtons').show();
+			incomingCallAudio.pause();
+		}
+		document.getElementById('callControl').hide();
+	}else{
+		document.getElementById('incomingCall').hide();
+		document.getElementById('callControl').show();
+		document.getElementById('callStatus').hide();
+		document.getElementById('inCallButtons').hide();
+		incomingCallAudio.pause();
+	}
+	//microphone mute icon
+	var muteIcon = document.getElementById('muteIcon');
+	if(session && session.isMuted().audio){
+		muteIcon.classList.add('fa-microphone-slash');
+		muteIcon.classList.remove('fa-microphone');
+	}else{
+		muteIcon.classList.remove('fa-microphone-slash');
+		muteIcon.classList.add('fa-microphone');
+	}
+}
+
+function start() {
+	authed(function(){
+		fetch("/sipData", {
+			headers: {
+				'Authorization': 'Bearer ' + authData.token
+			}
+		})
+		.then(checkResponse)
+		.then(setupPhone, function(err) {
+			setError(document, err);
+		});
+	});
+}
+
+document.addEventListener('DOMContentLoaded', start);
