@@ -211,9 +211,6 @@ function setupPhone(sipData) {
 
 	phone.on('newRTCSession', function(data){
 		setSession(data.session);
-		if (session.direction === 'incoming') {
-			incomingCallAudio.play();
-		}
 	});
 	switchToScreen(connecting);
 	phone.start();
@@ -241,6 +238,9 @@ function setSession(s) {
 		session.on('confirmed', function(){
 			updateDialerUI();
 		});
+		if (session.direction === 'incoming') {
+			incomingCallAudio.play();
+		}
 	}
 	updateDialerUI();
 }

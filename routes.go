@@ -25,8 +25,8 @@ func getRoutes(router *gin.Engine, db *gorm.DB) error {
 	authMiddleware := &jwt.GinJWTMiddleware{
 		Realm:      "Bandwidth",
 		Key:        []byte("9SbPxeIyvoT3HkIQ19wN9p_e_b6Xb7iJ"),
-		Timeout:    time.Hour,
-		MaxRefresh: time.Hour * 24,
+		Timeout:    time.Hour * 24,
+		MaxRefresh: time.Hour * 24 * 7,
 		Authenticator: func(userId string, password string, c *gin.Context) (string, bool) {
 			user := &User{}
 			if db.First(user, "user_name = ?", userId).RecordNotFound() {
