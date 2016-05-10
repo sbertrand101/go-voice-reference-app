@@ -3,6 +3,7 @@ package main
 import (
 	"strconv"
 	"time"
+	"fmt"
 
 	"errors"
 	"net/http"
@@ -10,6 +11,7 @@ import (
 	"github.com/appleboy/gin-jwt"
 	"github.com/gin-gonic/gin"
 	"github.com/jinzhu/gorm"
+	"github.com/bandwidthcom/go-bandwidth"
 )
 
 // RegisterForm is used on used registering
@@ -18,6 +20,15 @@ type RegisterForm struct {
 	Password       string `form:"password",json:"password",binding:"required"`
 	RepeatPassword string `form:"repeatPassword",json:"repeatPassword",binding:"required"`
 	AreaCode       string `form:"areaCode",json:"areaCode",binding:"required"`
+}
+
+// CallbackForm is used for call callbacks
+type CallbackForm struct {
+	From      string `json:"from"`
+	To        string `json:"to"`
+	EventType string `json:"eventType"`
+	CallID    string `json:"callId"`
+	Tag       string `json:"tag"`
 }
 
 func getRoutes(router *gin.Engine, db *gorm.DB) error {
@@ -113,15 +124,54 @@ func getRoutes(router *gin.Engine, db *gorm.DB) error {
 		}
 		c.JSON(http.StatusOK, gin.H{
 			"phoneNumber": user.PhoneNumber,
-			"sipUri": user.SIPURI,
-			"token":  token.Token,
-			"expire": time.Now().Add(time.Duration(token.Expires) * time.Second),
+			"sipUri":      user.SIPURI,
+			"token":       token.Token,
+			"expire":      time.Now().Add(time.Duration(token.Expires) * time.Second),
 		})
+	})
+
+	router.POST("/callCallback", func(c *gin.Context) {
+		form := &CallbackForm{}
+		api := c.MustGet("catapultAPI").(catapultAPIInterface)
+		err := c.Bind(form)
+		if err != nil {
+			setError(c, http.StatusBadRequest, err)
+			return
+		}
+		user := &User{}
+		if !db.First(user, "sip_uri = ? OR phoneNumber = ? OR phoneNumber = ?", form.From, form.From, form.To).RecordNotFound() {
+			switch form.EventType {
+			case "answer":
+				handleAnswer(form, c, user, api)
+			case "hangup":
+				handleHangup(form, c, user, api)
+			}
+		}
+		c.String(http.StatusOK, "")
 	})
 
 	router.StaticFile("/", "./public/index.html")
 
 	return nil
+}
+
+func handleAnswer(form *CallbackForm, c *gin.Context, user* User, api catapultAPIInterface) {
+	if form.To == user.PhoneNumber {
+		api.UpdateCall(form.CallID, &bandwidth.UpdateCallData{
+			State: "transferring",
+			TransferTo: user.SIPURI,
+			TransferCallerID: form.From,
+		})
+		return
+	}
+	api.PlayAudioToCall(form.CallID, &bandwidth.PlayAudioData{
+		FileURL: fmt.Sprintf("http://%s/audio/ring.mp3", c.Request.Header.Get("Host")),
+		LoopEnabled: true,
+	})
+}
+
+func handleHangup(form *CallbackForm, c *gin.Context, user* User, api catapultAPIInterface) {
+
 }
 
 func setErrorMessage(c *gin.Context, code int, message string) {

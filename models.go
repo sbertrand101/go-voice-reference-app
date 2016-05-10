@@ -19,7 +19,7 @@ type User struct {
 	AreaCode     string `gorm:"type:char(3)"`
 	PhoneNumber  string `gorm:"type:varchar(32);unique_index"`
 	EndpointID   string `gorm:"column:endpoint_id;type:varchar(64)"`
-	SIPURI       string `gorm:"column:sip_uri;type:varchar(1024)"`
+	SIPURI       string `gorm:"column:sip_uri;type:varchar(1024);index"`
 	SIPPassword  string `gorm:"column:sip_password;type:varchar(128)"`
 }
 

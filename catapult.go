@@ -28,6 +28,10 @@ type catapultAPIInterface interface {
 	CreatePhoneNumber(areaCode string) (string, error)
 	CreateSIPAccount() (*sipAccount, error)
 	CreateSIPAuthToken(endpointID string) (*bandwidth.DomainEndpointToken, error)
+	PlayAudioToCall(callID string, data *bandwidth.PlayAudioData) error
+	CreateBridge(data *bandwidth.BridgeData) (string, error)
+	MakeCall(data *bandwidth.CreateCallData) (string, error)
+	UpdateCall(callID string, data *bandwidth.UpdateCallData) error
 }
 
 func newCatapultAPI(context *gin.Context) (*catapultAPI, error) {
@@ -144,6 +148,22 @@ func (api *catapultAPI) CreateSIPAuthToken(endpointID string) (*bandwidth.Domain
 		return nil, err
 	}
 	return api.client.CreateDomainEndpointToken(domainID, endpointID)
+}
+
+func (api *catapultAPI) UpdateCall(callID string, data *bandwidth.UpdateCallData) error {
+	return api.client.UpdateCall(callID, data)
+}
+
+func (api *catapultAPI) PlayAudioToCall(callID string, data *bandwidth.PlayAudioData) error {
+	return api.client.PlayAudioToCall(callID, data)
+}
+
+func (api *catapultAPI) CreateBridge(data *bandwidth.BridgeData) (string, error) {
+	return api.client.CreateBridge(data)
+}
+
+func (api *catapultAPI) MakeCall(data *bandwidth.CreateCallData) (string, error) {
+	return api.client.CreateCall(data)
 }
 
 func catapultMiddleware(c *gin.Context) {
