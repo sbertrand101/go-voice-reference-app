@@ -137,8 +137,8 @@ func (m *fakeCatapultAPI) CreateSIPAuthToken(endpointID string) (*bandwidth.Doma
 }
 
 func (m *fakeCatapultAPI) PlayAudioToCall(callID string, data *bandwidth.PlayAudioData) error {
-	args := m.Called(callID, data)
-	return args.Error(0)
+	m.Called(callID, data)
+	return nil
 }
 
 func (m *fakeCatapultAPI) CreateBridge(data *bandwidth.BridgeData) (string, error) {
@@ -152,8 +152,8 @@ func (m *fakeCatapultAPI) MakeCall(data *bandwidth.CreateCallData) (string, erro
 }
 
 func (m *fakeCatapultAPI) UpdateCall(callID string, data *bandwidth.UpdateCallData) error {
-	args := m.Called(callID, data)
-	return args.Error(0)
+	m.Called(callID, data)
+	return nil
 }
 
 func (m *fakeCatapultAPI) GetBridgeCalls(bridgeID string) ([]*bandwidth.Call, error) {

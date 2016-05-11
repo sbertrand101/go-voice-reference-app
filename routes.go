@@ -93,11 +93,13 @@ func getRoutes(router *gin.Engine, db *gorm.DB) error {
 			setError(c, http.StatusBadRequest, errors.New("User with such name is registered already"))
 			return
 		}
+		debugf("Reserving phone number for area code %s\n", form.AreaCode)
 		phoneNumber, err := api.CreatePhoneNumber(user.AreaCode)
 		if err != nil {
 			setError(c, http.StatusBadGateway, err, "Error on creating phone number: "+err.Error())
 			return
 		}
+		debugf("Creating SIP account\n")
 		sipAccount, err := api.CreateSIPAccount()
 		if err != nil {
 			setError(c, http.StatusBadGateway, err, "Error on creating SIP Account: "+err.Error())
@@ -136,7 +138,7 @@ func getRoutes(router *gin.Engine, db *gorm.DB) error {
 		form := &CallbackForm{}
 		api := c.MustGet("catapultAPI").(catapultAPIInterface)
 		err := c.Bind(form)
-		fmt.Printf("Got: %s from %s to %s", form.EventType, form.From, form.To)
+		debugf("Got: %s from %s to %s\n", form.EventType, form.From, form.To)
 		if bridges == nil {
 			bridges = make(map[string]string, 0)
 		}
@@ -165,9 +167,9 @@ func handleAnswer(form *CallbackForm, c *gin.Context, user *User, api catapultAP
 	if form.Tag != "" {
 		return
 	}
-	fmt.Printf("Answered %s -> %s\n", form.From, form.To)
+	debugf("Answered %s -> %s\n", form.From, form.To)
 	if form.To == user.PhoneNumber {
-		fmt.Printf("Transfering call to  %s\n", user.SIPURI)
+		debugf("Transfering call to  %s\n", user.SIPURI)
 		api.UpdateCall(form.CallID, &bandwidth.UpdateCallData{
 			State:            "transferring",
 			TransferTo:       user.SIPURI,
@@ -175,18 +177,18 @@ func handleAnswer(form *CallbackForm, c *gin.Context, user *User, api catapultAP
 		})
 		return
 	}
-	fmt.Println("Play wait sound")
-	api.PlayAudioToCall(form.CallID, &bandwidth.PlayAudioData{
+	debugf("Play wait sound\n")
+	_ = api.PlayAudioToCall(form.CallID, &bandwidth.PlayAudioData{
 		FileURL:     fmt.Sprintf("http://%s/audio/ring.mp3", c.Request.Host),
 		LoopEnabled: true,
 	})
-	fmt.Println("Creating bridge")
+	debugf("Creating bridge\n")
 	bridgeID, _ := api.CreateBridge(&bandwidth.BridgeData{
 		CallIDs:     []string{form.CallID},
 		BridgeAudio: true,
 	})
 	bridges[form.CallID] = bridgeID
-	fmt.Printf("Making bridged call to another leg %s\n", form.To)
+	debugf("Making bridged call to another leg %s\n", form.To)
 	callID, _ := api.MakeCall(&bandwidth.CreateCallData{
 		From:        user.PhoneNumber,
 		To:          form.To,
@@ -202,11 +204,12 @@ func handleHangup(form *CallbackForm, c *gin.Context, user *User, api catapultAP
 	if bridgeID == "" {
 		return
 	}
+	delete(bridges, form.CallID)
 	calls, _ := api.GetBridgeCalls(bridgeID)
 	for _, call := range calls {
 		delete(bridges, call.ID)
 		if call.State == "active" {
-			fmt.Println("Hang up bridged call")
+			debugf("Hang up bridged call\n")
 			api.Hangup(call.ID)
 		}
 	}
@@ -228,4 +231,10 @@ func setError(c *gin.Context, code int, err error, message ...string) {
 		errorMessage = err.Error()
 	}
 	setErrorMessage(c, code, errorMessage)
+}
+
+func debugf(format string, a ...interface{}) {
+	if gin.IsDebugging() {
+		fmt.Printf("[routes] " + format, a)
+	}
 }
