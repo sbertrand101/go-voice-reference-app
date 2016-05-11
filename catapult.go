@@ -32,6 +32,8 @@ type catapultAPIInterface interface {
 	CreateBridge(data *bandwidth.BridgeData) (string, error)
 	MakeCall(data *bandwidth.CreateCallData) (string, error)
 	UpdateCall(callID string, data *bandwidth.UpdateCallData) error
+	GetBridgeCalls(bridgeID string) ([]*bandwidth.Call, error)
+	Hangup(callID string) error
 }
 
 func newCatapultAPI(context *gin.Context) (*catapultAPI, error) {
@@ -50,18 +52,15 @@ func (api *catapultAPI) GetApplicationID() (string, error) {
 	var application *bandwidth.Application
 	for _, application = range applications {
 		if application.Name == applicationName {
-			break
+			applicationID = application.ID
+			return applicationID, nil
 		}
-	}
-	if application != nil {
-		applicationID = application.ID
-		return applicationID, nil
 	}
 	applicationID, err = api.client.CreateApplication(&bandwidth.ApplicationData{
 		Name:               applicationName,
 		AutoAnswer:         true,
 		CallbackHTTPMethod: "POST",
-		IncomingCallURL:    fmt.Sprintf("http://%s/callCallback", api.context.Request.Header.Get("Host")),
+		IncomingCallURL:    fmt.Sprintf("http://%s/callCallback", api.context.Request.Host),
 	})
 	return applicationID, err
 }
@@ -164,6 +163,14 @@ func (api *catapultAPI) CreateBridge(data *bandwidth.BridgeData) (string, error)
 
 func (api *catapultAPI) MakeCall(data *bandwidth.CreateCallData) (string, error) {
 	return api.client.CreateCall(data)
+}
+
+func (api *catapultAPI) GetBridgeCalls(bridgeID string) ([]*bandwidth.Call, error) {
+	return api.client.GetBridgeCalls(bridgeID)
+}
+
+func (api *catapultAPI) Hangup(callID string) error {
+	return api.client.HangUpCall(callID)
 }
 
 func catapultMiddleware(c *gin.Context) {

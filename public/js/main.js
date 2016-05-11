@@ -68,10 +68,14 @@ registerForm.getElementsByTagName('form')[0].addEventListener('submit', function
 });
 
 function makeCall(){
-	if (!toField.value) {
+	var number = toField.value;
+	if (!number) {
 		return;
 	}
-	phone.call(toField.value, callOptions);
+	if (number.length === 10) {
+		number = '+1' + number;
+	}
+	phone.call(number, callOptions);
     updateDialerUI();
 }
 

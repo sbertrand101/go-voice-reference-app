@@ -1,17 +1,17 @@
 package main
 
 import (
+	"fmt"
 	"strconv"
 	"time"
-	"fmt"
 
 	"errors"
 	"net/http"
 
 	"github.com/appleboy/gin-jwt"
+	"github.com/bandwidthcom/go-bandwidth"
 	"github.com/gin-gonic/gin"
 	"github.com/jinzhu/gorm"
-	"github.com/bandwidthcom/go-bandwidth"
 )
 
 // RegisterForm is used on used registering
@@ -30,6 +30,8 @@ type CallbackForm struct {
 	CallID    string `json:"callId"`
 	Tag       string `json:"tag"`
 }
+
+var bridges map[string]string
 
 func getRoutes(router *gin.Engine, db *gorm.DB) error {
 
@@ -134,12 +136,15 @@ func getRoutes(router *gin.Engine, db *gorm.DB) error {
 		form := &CallbackForm{}
 		api := c.MustGet("catapultAPI").(catapultAPIInterface)
 		err := c.Bind(form)
+		if bridges == nil {
+			bridges = make(map[string]string, 0)
+		}
 		if err != nil {
 			setError(c, http.StatusBadRequest, err)
 			return
 		}
 		user := &User{}
-		if !db.First(user, "sip_uri = ? OR phoneNumber = ? OR phoneNumber = ?", form.From, form.From, form.To).RecordNotFound() {
+		if !db.First(user, "sip_uri = ? OR phone_number = ? OR phone_number = ?", form.From, form.From, form.To).RecordNotFound() {
 			switch form.EventType {
 			case "answer":
 				handleAnswer(form, c, user, api)
@@ -155,23 +160,55 @@ func getRoutes(router *gin.Engine, db *gorm.DB) error {
 	return nil
 }
 
-func handleAnswer(form *CallbackForm, c *gin.Context, user* User, api catapultAPIInterface) {
+func handleAnswer(form *CallbackForm, c *gin.Context, user *User, api catapultAPIInterface) {
+	if form.Tag != "" {
+		return
+	}
+	fmt.Printf("Answered %s -> %s\n", form.From, form.To)
 	if form.To == user.PhoneNumber {
+		fmt.Printf("Transfering call to  %s\n", user.SIPURI)
 		api.UpdateCall(form.CallID, &bandwidth.UpdateCallData{
-			State: "transferring",
-			TransferTo: user.SIPURI,
+			State:            "transferring",
+			TransferTo:       user.SIPURI,
 			TransferCallerID: form.From,
 		})
 		return
 	}
+	fmt.Println("Play wait sound")
 	api.PlayAudioToCall(form.CallID, &bandwidth.PlayAudioData{
-		FileURL: fmt.Sprintf("http://%s/audio/ring.mp3", c.Request.Header.Get("Host")),
+		FileURL:     fmt.Sprintf("http://%s/audio/ring.mp3", c.Request.Host),
 		LoopEnabled: true,
 	})
+	fmt.Println("Creating bridge")
+	bridgeID, _ := api.CreateBridge(&bandwidth.BridgeData{
+		CallIDs:     []string{form.CallID},
+		BridgeAudio: true,
+	})
+	bridges[form.CallID] = bridgeID
+	fmt.Printf("Making bridged call to another leg %s\n", form.To)
+	callID, _ := api.MakeCall(&bandwidth.CreateCallData{
+		From:        user.PhoneNumber,
+		To:          form.To,
+		BridgeID:    bridgeID,
+		Tag:         form.CallID,
+		CallbackURL: fmt.Sprintf("http://%s/callCallback", c.Request.Host),
+	})
+	bridges[callID] = bridgeID
 }
 
-func handleHangup(form *CallbackForm, c *gin.Context, user* User, api catapultAPIInterface) {
-
+func handleHangup(form *CallbackForm, c *gin.Context, user *User, api catapultAPIInterface) {
+	bridgeID := bridges[form.CallID]
+	if bridgeID == "" {
+		return
+	}
+	calls, _ := api.GetBridgeCalls(bridgeID)
+	for _, call := range calls {
+		delete(bridges, call.ID)
+		if call.State == "active" {
+			fmt.Println("Hang up bridged call")
+			api.Hangup(call.ID)
+		}
+	}
 }
 
 func setErrorMessage(c *gin.Context, code int, message string) {
