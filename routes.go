@@ -235,6 +235,11 @@ func setError(c *gin.Context, code int, err error, message ...string) {
 
 func debugf(format string, a ...interface{}) {
 	if gin.IsDebugging() {
-		fmt.Printf("[routes] " + format, a)
+		format = "[routes] " + format
+		if len(a) > 0 {
+			fmt.Printf(format, a)
+		} else {
+			fmt.Print(format)
+		}
 	}
 }

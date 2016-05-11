@@ -169,6 +169,7 @@ function authed(fn) {
 		fn();
 	}, function(err){
 		setError(document, err);
+		localStorage.removeItem('authData')
 		switchToScreen(loginForm);
 	});
 }
