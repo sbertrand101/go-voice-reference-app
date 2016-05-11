@@ -29,7 +29,7 @@ func TestGetCatapultApiFail(t *testing.T) {
 }
 
 func TestGetApplicationIDWithNewApplication(t *testing.T) {
-	applicationID = ""
+	applicationIDs = map[string]string{"localhost": ""}
 	server, api := startMockCatapultServer(t, []RequestHandler{
 		RequestHandler{
 			PathAndQuery:  "/v1/users/userID/applications?size=1000",
@@ -39,7 +39,7 @@ func TestGetApplicationIDWithNewApplication(t *testing.T) {
 		RequestHandler{
 			PathAndQuery:     "/v1/users/userID/applications",
 			Method:           http.MethodPost,
-			EstimatedContent: `{"name":"GolangVoiceReferenceApp","incomingCallUrl":"http://localhost/callCallback","callbackHttpMethod":"POST","autoAnswer":true}`,
+			EstimatedContent: `{"name":"GolangVoiceReferenceApp on localhost","incomingCallUrl":"http://localhost/callCallback","callbackHttpMethod":"POST","autoAnswer":true}`,
 			HeadersToSend:    map[string]string{"Location": "/v1/users/userID/applications/123"},
 		},
 	})
@@ -49,12 +49,12 @@ func TestGetApplicationIDWithNewApplication(t *testing.T) {
 }
 
 func TestGetApplicationIDWithExistingApplication(t *testing.T) {
-	applicationID = ""
+	applicationIDs = map[string]string{"localhost": ""}
 	server, api := startMockCatapultServer(t, []RequestHandler{
 		RequestHandler{
 			PathAndQuery:  "/v1/users/userID/applications?size=1000",
 			Method:        http.MethodGet,
-			ContentToSend: `[{"name": "GolangVoiceReferenceApp", "id": "0123"}]`,
+			ContentToSend: `[{"name": "GolangVoiceReferenceApp on localhost", "id": "0123"}]`,
 		},
 	})
 	defer server.Close()
@@ -63,12 +63,12 @@ func TestGetApplicationIDWithExistingApplication(t *testing.T) {
 }
 
 func TestGetApplicationIDRepeating(t *testing.T) {
-	applicationID = ""
+	applicationIDs = map[string]string{"localhost": ""}
 	server, api := startMockCatapultServer(t, []RequestHandler{
 		RequestHandler{
 			PathAndQuery:  "/v1/users/userID/applications?size=1000",
 			Method:        http.MethodGet,
-			ContentToSend: `[{"name": "GolangVoiceReferenceApp", "id": "1234"}]`,
+			ContentToSend: `[{"name": "GolangVoiceReferenceApp on localhost", "id": "1234"}]`,
 		},
 	})
 	id, _ := api.GetApplicationID()
@@ -81,7 +81,7 @@ func TestGetApplicationIDRepeating(t *testing.T) {
 }
 
 func TestGetApplicationIDFail(t *testing.T) {
-	applicationID = ""
+	applicationIDs = map[string]string{"localhost": ""}
 	server, api := startMockCatapultServer(t, []RequestHandler{
 		RequestHandler{
 			PathAndQuery:     "/v1/users/userID/applications?size=1000",
@@ -166,7 +166,7 @@ func TestGetDomainFail(t *testing.T) {
 }
 
 func TestCreatePhoneNumber(t *testing.T) {
-	applicationID = "123"
+	applicationIDs = map[string]string{"localhost": "123"}
 	server, api := startMockCatapultServer(t, []RequestHandler{
 		RequestHandler{
 			PathAndQuery:  "/v1/availableNumbers/local?areaCode=910&quantity=1",
@@ -185,7 +185,7 @@ func TestCreatePhoneNumber(t *testing.T) {
 }
 
 func TestCreatePhoneNumberFail(t *testing.T) {
-	applicationID = ""
+	applicationIDs = map[string]string{"localhost": ""}
 	server, api := startMockCatapultServer(t, []RequestHandler{
 		RequestHandler{
 			PathAndQuery:     "/v1/users/userID/applications?size=1000",
@@ -199,7 +199,7 @@ func TestCreatePhoneNumberFail(t *testing.T) {
 }
 
 func TestCreatePhoneNumberFail2(t *testing.T) {
-	applicationID = "123"
+	applicationIDs = map[string]string{"localhost": "123"}
 	server, api := startMockCatapultServer(t, []RequestHandler{
 		RequestHandler{
 			PathAndQuery:     "/v1/availableNumbers/local?areaCode=910&quantity=1",
@@ -213,7 +213,7 @@ func TestCreatePhoneNumberFail2(t *testing.T) {
 }
 
 func TestCreatePhoneNumberFail3(t *testing.T) {
-	applicationID = "123"
+	applicationIDs = map[string]string{"localhost": "123"}
 	server, api := startMockCatapultServer(t, []RequestHandler{
 		RequestHandler{
 			PathAndQuery:  "/v1/availableNumbers/local?areaCode=910&quantity=1",
@@ -232,7 +232,7 @@ func TestCreatePhoneNumberFail3(t *testing.T) {
 }
 
 func TestCreateSIPAccount(t *testing.T) {
-	applicationID = "123"
+	applicationIDs = map[string]string{"localhost": "123"}
 	domainID = "456"
 	domainName = "domain1"
 	server, api := startMockCatapultServer(t, []RequestHandler{
@@ -255,7 +255,7 @@ func TestCreateSIPAccount(t *testing.T) {
 }
 
 func TestCreateSIPAccountFail(t *testing.T) {
-	applicationID = "123"
+	applicationIDs = map[string]string{"localhost": "123"}
 	domainID = "456"
 	domainName = "domain2"
 	server, api := startMockCatapultServer(t, []RequestHandler{
@@ -273,7 +273,7 @@ func TestCreateSIPAccountFail(t *testing.T) {
 }
 
 func TestCreateSIPAccountFail2(t *testing.T) {
-	applicationID = "123"
+	applicationIDs = map[string]string{"localhost": "123"}
 	domainID = ""
 	domainName = ""
 	server, api := startMockCatapultServer(t, []RequestHandler{
@@ -289,7 +289,7 @@ func TestCreateSIPAccountFail2(t *testing.T) {
 }
 
 func TestCreateSIPAccountFail3(t *testing.T) {
-	applicationID = ""
+	applicationIDs = map[string]string{"localhost": ""}
 	domainID = ""
 	domainName = ""
 	server, api := startMockCatapultServer(t, []RequestHandler{

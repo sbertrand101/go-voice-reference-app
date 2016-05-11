@@ -18,7 +18,7 @@ type catapultAPI struct {
 	context *gin.Context
 }
 
-var applicationID string
+var applicationIDs map[string]string
 var domainID string
 var domainName string
 
@@ -42,6 +42,12 @@ func newCatapultAPI(context *gin.Context) (*catapultAPI, error) {
 }
 
 func (api *catapultAPI) GetApplicationID() (string, error) {
+	host := api.context.Request.Host
+	appName := fmt.Sprintf("%s on %s", applicationName, host)
+	if applicationIDs == nil {
+		applicationIDs = make(map[string]string, 0)
+	}
+	applicationID := applicationIDs[host]
 	if applicationID != "" {
 		return applicationID, nil
 	}
@@ -51,17 +57,21 @@ func (api *catapultAPI) GetApplicationID() (string, error) {
 	}
 	var application *bandwidth.Application
 	for _, application = range applications {
-		if application.Name == applicationName {
+		if application.Name == appName {
 			applicationID = application.ID
+			applicationIDs[host] = applicationID
 			return applicationID, nil
 		}
 	}
 	applicationID, err = api.client.CreateApplication(&bandwidth.ApplicationData{
-		Name:               applicationName,
+		Name:               appName,
 		AutoAnswer:         true,
 		CallbackHTTPMethod: "POST",
-		IncomingCallURL:    fmt.Sprintf("http://%s/callCallback", api.context.Request.Host),
+		IncomingCallURL:    fmt.Sprintf("http://%s/callCallback", host),
 	})
+	if applicationID != "" {
+		applicationIDs[host] = applicationID
+	}
 	return applicationID, err
 }
 
