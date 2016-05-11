@@ -7,6 +7,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
+	"github.com/bandwidthcom/go-bandwidth"
 )
 
 func TestNewCatapultApi(t *testing.T) {
@@ -344,6 +345,180 @@ func TestCreateSIPAuthTokenFail2(t *testing.T) {
 	_, err := api.CreateSIPAuthToken("456")
 	assert.Error(t, err)
 }
+
+func TestUpdateCall(t *testing.T) {
+	server, api := startMockCatapultServer(t, []RequestHandler{
+		RequestHandler{
+			PathAndQuery:  "/v1/users/userID/calls/123",
+			Method:        http.MethodPost,
+			EstimatedContent: `{"state":"transfering"}`,
+		},
+	})
+	defer server.Close()
+	api.UpdateCall("123", &bandwidth.UpdateCallData{
+		State: "transfering",
+	})
+}
+
+func TestUpdateCallFail(t *testing.T) {
+	server, api := startMockCatapultServer(t, []RequestHandler{
+		RequestHandler{
+			PathAndQuery:  "/v1/users/userID/calls/123",
+			Method:        http.MethodPost,
+			StatusCodeToSend: http.StatusBadRequest,
+		},
+	})
+	defer server.Close()
+	err := api.UpdateCall("123", &bandwidth.UpdateCallData{
+		State: "transfering",
+	})
+	assert.Error(t, err)
+}
+
+func TestPlayAudioToCall(t *testing.T) {
+	server, api := startMockCatapultServer(t, []RequestHandler{
+		RequestHandler{
+			PathAndQuery:  "/v1/users/userID/calls/123/audio",
+			Method:        http.MethodPost,
+			EstimatedContent: `{"fileUrl":"url"}`,
+		},
+	})
+	defer server.Close()
+	api.PlayAudioToCall("123", &bandwidth.PlayAudioData{
+		FileURL: "url",
+	})
+}
+
+func TestPlayAudioToCallFail(t *testing.T) {
+	server, api := startMockCatapultServer(t, []RequestHandler{
+		RequestHandler{
+			PathAndQuery:  "/v1/users/userID/calls/123/audio",
+			Method:        http.MethodPost,
+			StatusCodeToSend: http.StatusBadRequest,
+		},
+	})
+	defer server.Close()
+	err := api.PlayAudioToCall("123", &bandwidth.PlayAudioData{
+		FileURL: "url",
+	})
+	assert.Error(t, err)
+}
+
+func TestCreateBridge(t *testing.T) {
+	server, api := startMockCatapultServer(t, []RequestHandler{
+		RequestHandler{
+			PathAndQuery:  "/v1/users/userID/bridges",
+			Method:        http.MethodPost,
+			EstimatedContent: `{"callIds":["id"]}`,
+			HeadersToSend:    map[string]string{"Location": "/v1/users/userID/bridges/456"},
+		},
+	})
+	defer server.Close()
+	id, _ := api.CreateBridge(&bandwidth.BridgeData{
+		CallIDs: []string{"id"},
+	})
+	assert.Equal(t, "456", id)
+}
+
+func TestCreateBridgeFail(t *testing.T) {
+	server, api := startMockCatapultServer(t, []RequestHandler{
+		RequestHandler{
+			PathAndQuery:  "/v1/users/userID/bridges",
+			Method:        http.MethodPost,
+			StatusCodeToSend: http.StatusBadRequest,
+		},
+	})
+	defer server.Close()
+	_, err := api.CreateBridge(&bandwidth.BridgeData{
+		CallIDs: []string{"id"},
+	})
+	assert.Error(t, err)
+}
+
+func TestMakeCall(t *testing.T) {
+	server, api := startMockCatapultServer(t, []RequestHandler{
+		RequestHandler{
+			PathAndQuery:  "/v1/users/userID/calls",
+			Method:        http.MethodPost,
+			EstimatedContent: `{"from":"123","to":"345"}`,
+			HeadersToSend:    map[string]string{"Location": "/v1/users/userID/calls/456"},
+		},
+	})
+	defer server.Close()
+	id, _ := api.MakeCall(&bandwidth.CreateCallData{
+		From: "123",
+		To: "345",
+	})
+	assert.Equal(t, "456", id)
+}
+
+func TestMakeCallFail(t *testing.T) {
+	server, api := startMockCatapultServer(t, []RequestHandler{
+		RequestHandler{
+			PathAndQuery:  "/v1/users/userID/calls",
+			Method:        http.MethodPost,
+			StatusCodeToSend: http.StatusBadRequest,
+		},
+	})
+	defer server.Close()
+	_, err := api.MakeCall(&bandwidth.CreateCallData{
+		From: "123",
+		To: "345",
+	})
+	assert.Error(t, err)
+}
+
+func TestGetBridgeCalls(t *testing.T) {
+	server, api := startMockCatapultServer(t, []RequestHandler{
+		RequestHandler{
+			PathAndQuery:  "/v1/users/userID/bridges/123/calls",
+			Method:        http.MethodGet,
+			ContentToSend: `[]`,
+		},
+	})
+	defer server.Close()
+	calls, _ := api.GetBridgeCalls("123")
+	assert.Equal(t, 0, len(calls))
+}
+
+func TestGetBridgeCallsFail(t *testing.T) {
+	server, api := startMockCatapultServer(t, []RequestHandler{
+		RequestHandler{
+			PathAndQuery:  "/v1/users/userID/bridges/123/calls",
+			Method:        http.MethodPost,
+			StatusCodeToSend: http.StatusBadRequest,
+		},
+	})
+	defer server.Close()
+	_, err := api.GetBridgeCalls("123")
+	assert.Error(t, err)
+}
+
+func TestHangup(t *testing.T) {
+	server, api := startMockCatapultServer(t, []RequestHandler{
+		RequestHandler{
+			PathAndQuery:  "/v1/users/userID/calls/123",
+			Method:        http.MethodPost,
+			EstimatedContent: `{"state":"completed"}`,
+		},
+	})
+	defer server.Close()
+	api.Hangup("123")
+}
+
+func TestHangupFail(t *testing.T) {
+	server, api := startMockCatapultServer(t, []RequestHandler{
+		RequestHandler{
+			PathAndQuery:  "/v1/users/userID/calls/123",
+			Method:        http.MethodPost,
+			StatusCodeToSend: http.StatusBadRequest,
+		},
+	})
+	defer server.Close()
+	err := api.Hangup("123")
+	assert.Error(t, err)
+}
+
 
 func TestCatapultMiddleware(t *testing.T) {
 	os.Setenv("CATAPULT_USER_ID", "UserID")
