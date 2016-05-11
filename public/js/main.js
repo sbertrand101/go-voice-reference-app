@@ -243,9 +243,6 @@ function setSession(s) {
 		session.on('confirmed', function(){
 			updateDialerUI();
 		});
-		if (session.direction === 'incoming') {
-			incomingCallAudio.play();
-		}
 	}
 	updateDialerUI();
 }
@@ -260,7 +257,9 @@ function updateDialerUI(){
 	if(session){
 		if(session.isInProgress()){
 			if(session.direction === 'incoming'){
-				document.getElementById('incomingCallNumber').innerHTML = session.remote_identity.uri;
+				incomingCallAudio.play();
+				var m = /sip\:(\+?\d+)@/.exec(session.remote_identity.uri)
+				document.getElementById('incomingCallNumber').innerHTML = m[1];
 				document.getElementById('incomingCall').show();
 				document.getElementById('callControl').hide();
 				document.getElementById('incomingCall').show();
