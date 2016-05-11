@@ -136,6 +136,7 @@ func getRoutes(router *gin.Engine, db *gorm.DB) error {
 		form := &CallbackForm{}
 		api := c.MustGet("catapultAPI").(catapultAPIInterface)
 		err := c.Bind(form)
+		fmt.Printf("Got: %s from %s to %s", form.EventType, form.From, form.To)
 		if bridges == nil {
 			bridges = make(map[string]string, 0)
 		}
