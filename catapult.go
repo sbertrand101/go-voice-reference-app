@@ -82,13 +82,10 @@ func (api *catapultAPI) GetDomain() (string, string, error) {
 	const description = applicationName + "'s domain"
 	for _, domain = range domains {
 		if domain.Description == description {
-			break
+			domainID = domain.ID
+			domainName = domain.Name
+			return domainID, domainName, nil
 		}
-	}
-	if domain != nil {
-		domainID = domain.ID
-		domainName = domain.Name
-		return domainID, domainName, nil
 	}
 	domainName = randomString(15)
 	domainID, err = api.client.CreateDomain(&bandwidth.CreateDomainData{

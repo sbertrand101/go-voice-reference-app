@@ -196,6 +196,7 @@
 	}
 
 	function setupPhone(sipData) {
+		var tries = 15;
 		sipAuthHeader = 'X-Callsign-Token: ' + sipData.token;
 		callOptions = {
 			extraHeaders: [sipAuthHeader],
@@ -221,6 +222,12 @@
 		});
 
 		phone.on('registrationFailed', function(e){
+			if ((--tries) > 0) {
+				setTimeout(function(){
+					phone.register()
+				}, 10000); // try to reregister again
+				return;
+			}
 			setError(document, e.cause);
 			switchToScreen(null);
 		});
