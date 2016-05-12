@@ -1,0 +1,24 @@
+language: go
+
+services:
+  - postgresql
+go:
+  - 1.6
+  - tip
+
+before_install:
+  - export PATH=$HOME/gopath/bin:$PATH
+
+script:
+  - ENV_GIN_MODE=test go test -race ./...
+  - ENV_GIN_MODE=test go test -cover ./...
+
+matrix:
+    allow_failures:
+        - go: tip
+
+git:
+  depth: 10
+
+before_script:
+  - psql -c 'create database golang_voice_reference_app_test;' -U postgres
