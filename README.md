@@ -9,13 +9,14 @@
 You can open up the web page at the root of the deployed project for more instructions and for example of voice calling in your web browser using WebRTC.
 
 Uses the:
-* [Catapult Golang SDK](https://github.com/bandwidthcom/go-bandwidth)
+* [Catapult Golang SDK](https://github.com/bandwidthcom/go-bandwidth/?utm_medium=social&utm_source=github&utm_campaign=dtolb&utm_content=_)
 
 ## Prerequisites
 - Configured Machine with Ngrok/Port Forwarding -OR- Heroku Account
   - [Ngrok](https://ngrok.com/)
   - [Heroku](https://www.heroku.com/)
 - [Catapult Account](http://ap.bandwidth.com/?utm_medium=social&utm_source=github&utm_campaign=dtolb&utm_content=_)
+- [PostgreSQL](http://www.postgresql.org/download/)
 - [Go 1.6+](https://golang.org/dl/)
 
 ## Deploy To PaaS
@@ -34,8 +35,9 @@ Before running export next environment variables :
 
 Set environment variable `DATABASE_URL` with connection string to existing PostgresSQL database.
 
-After that run `go install`  to install dependencies and build executable file.
+Install `godep` via `go get github.com/tools/godep` if need.
 
+After that run `godep go build`  to build executable file.
 
 You can run this demo  like `./go-voice-reference-app` (use environment variable `PORT` to change port to listen to) on local machine if you have ability to handle external requests or use any external hosting.
 
