@@ -25,3 +25,4 @@ _testmain.go
 go-voice-reference-app
 
 bindata.go # generated file
+vendor
