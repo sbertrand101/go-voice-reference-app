@@ -22,6 +22,8 @@ _testmain.go
 *.exe
 *.test
 *.prof
-go-voice-reference-app
-
-bindata.go # generated file
+*.test
+*.out
+*.txt
+cover.html
+README.html
