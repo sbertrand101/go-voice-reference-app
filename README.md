@@ -57,7 +57,7 @@ Configure the app by commands
 Add PostgreSQL support by
 
 ```
-heroku addons:create heroku-postgresql:golang_voice_reference_app
+heroku addons:create heroku-postgresql:hobby-dev
 ```
 
 Run `git push heroku master` to deploy this project.

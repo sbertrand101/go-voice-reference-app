@@ -4,7 +4,7 @@
   "repository": "https://github.com/BandwidthExamples/go-voice-reference-app.git",
   "logo": "https://avatars2.githubusercontent.com/u/12057884?v=3&s=200",
   "keywords": ["go", "golang", "bandwidth", "catapult"],
-  "addons": ["heroku-postgresql:golang_voice_reference_app"],
+  "addons": ["heroku-postgresql:hobby-dev"],
   "env": {
     "CATAPULT_USER_ID": {
       "description": "Your Catapult User Id"
