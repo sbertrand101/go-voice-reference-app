@@ -208,7 +208,7 @@
 		if (phone) {
 			phone.stop();
 		}
-		JsSIP.debug.enable('JsSIP:*');
+		// JsSIP.debug.enable('JsSIP:*');
 		phone = new JsSIP.UA({
 			'uri': sipData.sipUri,
 			'ws_servers': 'wss://webrtc.registration.bandwidth.com:10443',
