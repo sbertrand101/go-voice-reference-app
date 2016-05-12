@@ -31,8 +31,6 @@ type CallbackForm struct {
 	Tag       string `json:"tag"`
 }
 
-var bridges map[string]string
-
 func getRoutes(router *gin.Engine, db *gorm.DB) error {
 
 	authMiddleware := &jwt.GinJWTMiddleware{
@@ -139,20 +137,32 @@ func getRoutes(router *gin.Engine, db *gorm.DB) error {
 		api := c.MustGet("catapultAPI").(catapultAPIInterface)
 		err := c.Bind(form)
 		debugf("Catapult Event: %v\n", form)
-		if bridges == nil {
-			bridges = make(map[string]string, 0)
-		}
 		if err != nil {
 			setError(c, http.StatusBadRequest, err)
 			return
 		}
 		user := &User{}
 		if !db.First(user, "sip_uri = ? OR phone_number = ? OR phone_number = ?", form.From, form.From, form.To).RecordNotFound() {
-			switch form.EventType {
-			case "answer":
-				handleAnswer(form, c, user, api)
-			case "hangup":
-				handleHangup(form, c, user, api)
+			if form.EventType == "answer" {
+				debugf("Answered %s -> %s\n", form.From, form.To)
+				if form.To == user.PhoneNumber {
+					debugf("Transfering incoming call  to  %s\n", user.SIPURI)
+					api.UpdateCall(form.CallID, &bandwidth.UpdateCallData{
+						State:            "transferring",
+						TransferTo:       user.SIPURI,
+						TransferCallerID: form.From,
+					})
+					return
+				}
+				if form.From == user.SIPURI {
+					debugf("Transfering outgoing call to  %s\n", form.To)
+					api.UpdateCall(form.CallID, &bandwidth.UpdateCallData{
+						State:            "transferring",
+						TransferTo:       form.To,
+						TransferCallerID: user.PhoneNumber,
+					})
+					return
+				}
 			}
 		}
 		c.String(http.StatusOK, "")
@@ -161,58 +171,6 @@ func getRoutes(router *gin.Engine, db *gorm.DB) error {
 	router.StaticFile("/", "./public/index.html")
 
 	return nil
-}
-
-func handleAnswer(form *CallbackForm, c *gin.Context, user *User, api catapultAPIInterface) {
-	if form.Tag != "" {
-		return
-	}
-	debugf("Answered %s -> %s\n", form.From, form.To)
-	if form.To == user.PhoneNumber {
-		debugf("Transfering call to  %s\n", user.SIPURI)
-		api.UpdateCall(form.CallID, &bandwidth.UpdateCallData{
-			State:            "transferring",
-			TransferTo:       user.SIPURI,
-			TransferCallerID: form.From,
-		})
-		return
-	}
-	debugf("Play wait sound\n")
-	_ = api.PlayAudioToCall(form.CallID, &bandwidth.PlayAudioData{
-		FileURL:     fmt.Sprintf("http://%s/audio/ring.mp3", c.Request.Host),
-		LoopEnabled: true,
-	})
-	debugf("Creating bridge\n")
-	bridgeID, _ := api.CreateBridge(&bandwidth.BridgeData{
-		CallIDs:     []string{form.CallID},
-		BridgeAudio: true,
-	})
-	bridges[form.CallID] = bridgeID
-	debugf("Making bridged call to another leg %s\n", form.To)
-	callID, _ := api.MakeCall(&bandwidth.CreateCallData{
-		From:        user.PhoneNumber,
-		To:          form.To,
-		BridgeID:    bridgeID,
-		Tag:         form.CallID,
-		CallbackURL: fmt.Sprintf("http://%s/callCallback", c.Request.Host),
-	})
-	bridges[callID] = bridgeID
-}
-
-func handleHangup(form *CallbackForm, c *gin.Context, user *User, api catapultAPIInterface) {
-	bridgeID := bridges[form.CallID]
-	if bridgeID == "" {
-		return
-	}
-	delete(bridges, form.CallID)
-	calls, _ := api.GetBridgeCalls(bridgeID)
-	for _, call := range calls {
-		delete(bridges, call.ID)
-		if call.State == "active" {
-			debugf("Hang up bridged call\n")
-			api.Hangup(call.ID)
-		}
-	}
 }
 
 func setErrorMessage(c *gin.Context, code int, message string) {

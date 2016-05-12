@@ -266,21 +266,11 @@ func TestRouteCallCallbackOutgoingCall(t *testing.T) {
 	}
 	user.SetPassword("123456")
 	db.Save(user)
-	api.On("PlayAudioToCall", "callID", &bandwidth.PlayAudioData{
-		FileURL:     "http:///audio/ring.mp3",
-		LoopEnabled: true,
+	api.On("UpdateCall", "callID", &bandwidth.UpdateCallData{
+		State:            "transferring",
+		TransferTo:       "+1472583690",
+		TransferCallerID: "+1234567891",
 	})
-	api.On("CreateBridge", &bandwidth.BridgeData{
-		CallIDs:     []string{"callID"},
-		BridgeAudio: true,
-	}).Return("bridgeID", nil)
-	api.On("MakeCall", &bandwidth.CreateCallData{
-		From:        "+1234567891",
-		To:          "+1472583690",
-		BridgeID:    "bridgeID",
-		Tag:         "callID",
-		CallbackURL: "http:///callCallback",
-	}).Return("newCallID", nil)
 	w := makeRequest(t, api, db, http.MethodPost, "/callCallback", "", &CallbackForm{
 		CallID:    "callID",
 		EventType: "answer",
@@ -289,8 +279,6 @@ func TestRouteCallCallbackOutgoingCall(t *testing.T) {
 	})
 	assert.Equal(t, http.StatusOK, w.Code)
 	api.AssertExpectations(t)
-	assert.Equal(t, "bridgeID", bridges["callID"])
-	assert.Equal(t, "bridgeID", bridges["newCallID"])
 }
 
 func TestRouteCallCallbackIncomingCall(t *testing.T) {
@@ -320,31 +308,7 @@ func TestRouteCallCallbackIncomingCall(t *testing.T) {
 	api.AssertExpectations(t)
 }
 
-func TestRouteCallCallbackAnsweredAnotherLeg(t *testing.T) {
-	api := &fakeCatapultAPI{}
-	db := openDBConnection(t)
-	defer db.Close()
-	user := &User{
-		AreaCode:    "910",
-		SIPURI:      "sip:atest@test.com",
-		PhoneNumber: "+1234567897",
-		UserName:    "auser",
-	}
-	user.SetPassword("123456")
-	db.Save(user)
-	w := makeRequest(t, api, db, http.MethodPost, "/callCallback", "", &CallbackForm{
-		CallID:    "newCallID",
-		EventType: "answer",
-		From:      "+1472583688",
-		To:        "+1234567897",
-		Tag:       "callID",
-	})
-	assert.Equal(t, http.StatusOK, w.Code)
-	api.AssertNotCalled(t, "UpdateCall")
-	api.AssertNotCalled(t, "PlayAudioToCall")
-}
-
-func TestRouteCallCallbackWithUnknowNumber(t *testing.T) {
+func TestRouteCallCallbackWithUnknownNumber(t *testing.T) {
 	api := &fakeCatapultAPI{}
 	db := openDBConnection(t)
 	defer db.Close()
@@ -356,77 +320,8 @@ func TestRouteCallCallbackWithUnknowNumber(t *testing.T) {
 	})
 	assert.Equal(t, http.StatusOK, w.Code)
 	api.AssertNotCalled(t, "UpdateCall")
-	api.AssertNotCalled(t, "PlayAudioToCall")
 }
 
-func TestRouteCallCallbackHangup(t *testing.T) {
-	api := &fakeCatapultAPI{}
-	db := openDBConnection(t)
-	defer db.Close()
-	user := &User{
-		AreaCode:    "910",
-		SIPURI:      "sip:htest@test.com",
-		PhoneNumber: "+1234567893",
-		UserName:    "huser",
-	}
-	user.SetPassword("123456")
-	db.Save(user)
-	api.On("GetBridgeCalls", "bridgeID").Return([]*bandwidth.Call{
-		&bandwidth.Call{
-			ID:    "callID1",
-			State: "active",
-		},
-		&bandwidth.Call{
-			ID:    "callID2",
-			State: "active",
-		},
-		&bandwidth.Call{
-			ID:    "callID3",
-			State: "completed",
-		},
-	}, nil)
-	api.On("Hangup", "callID1").Return(nil)
-	api.On("Hangup", "callID2").Return(nil)
-	bridges["callID"] = "bridgeID"
-	bridges["callID1"] = "bridgeID"
-	bridges["callID2"] = "bridgeID"
-	bridges["callID3"] = "bridgeID"
-	w := makeRequest(t, api, db, http.MethodPost, "/callCallback", "", &CallbackForm{
-		CallID:    "callID",
-		EventType: "hangup",
-		From:      "+1472583688",
-		To:        "+1234567893",
-	})
-	assert.Equal(t, http.StatusOK, w.Code)
-	api.AssertExpectations(t)
-	assert.Empty(t, bridges["callID"])
-	assert.Empty(t, bridges["callID1"])
-	assert.Empty(t, bridges["callID2"])
-	assert.Empty(t, bridges["callID3"])
-}
-
-func TestRouteCallCallbackHangupForNonExisingBridge(t *testing.T) {
-	api := &fakeCatapultAPI{}
-	db := openDBConnection(t)
-	defer db.Close()
-	user := &User{
-		AreaCode:    "910",
-		SIPURI:      "sip:htest1@test.com",
-		PhoneNumber: "+1234567894",
-		UserName:    "huser",
-	}
-	user.SetPassword("123456")
-	db.Save(user)
-	w := makeRequest(t, api, db, http.MethodPost, "/callCallback", "", &CallbackForm{
-		CallID:    "unknownCallID",
-		EventType: "hangup",
-		From:      "+1472583688",
-		To:        "+1234567894",
-	})
-	assert.Equal(t, http.StatusOK, w.Code)
-	api.AssertNotCalled(t, "GetBridgeCalls")
-	api.AssertNotCalled(t, "Hangup")
-}
 
 func makeRequest(t *testing.T, api catapultAPIInterface, db *gorm.DB, method, path, authToken string, body ...interface{}) *httptest.ResponseRecorder {
 	gin.SetMode(gin.TestMode)
