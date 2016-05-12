@@ -19,6 +19,11 @@
 	var incomingCallAudio = document.getElementById('incomingCallAudio');
 	var toField = document.getElementById('toField');
 	var phoneNumber = document.getElementById('phoneNumber');
+	var sipDetails = document.getElementById('sipDetails');
+	var sipDetailsLink = document.getElementById('sipDetailsLink');
+	var sipUserName = document.getElementById('sipUserName');
+	var sipDomain = document.getElementById('sipDomain');
+	var sipPassword = document.getElementById('sipPassword');
 
 	var phone, session, sipAuthHeader, callOptions;
 
@@ -98,6 +103,11 @@
 			session.mute({audio: true});
 		}
 		updateDialerUI();
+	});
+
+	sipDetailsLink.addEventListener('click', function(){
+		sipDetailsLink.style.display = 'none';
+		sipDetails.show();
 	});
 
 	toField.addEventListener('keypress', function(e){
@@ -222,6 +232,10 @@
 		phone.sipData = sipData;
 		phone.start();
 		phoneNumber.innerHTML = sipData.phoneNumber;
+		sipPassword.innerHTML = sipData.sipPassword;
+		var m = /sip\:([\w\.\-_]+)@([\w\.\-_]+)/i.exec(sipData.sipUri);
+		sipUserName.innerHTML = m[1];
+		sipDomain.innerHTML = m[2];
 	}
 
 	function setSession(s) {

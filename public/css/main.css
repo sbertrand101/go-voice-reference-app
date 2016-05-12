@@ -259,3 +259,16 @@ body, #body, #body>div {
     margin-bottom: 10px;
     font-size: 110%;
 }
+
+#sipDetailsLink {
+	display: block;
+    margin: 20px 0px;
+}
+
+#sipDetails {
+	font-size: 85%;
+}
+
+#sipDetails .title {
+	font-weight: bold;
+}

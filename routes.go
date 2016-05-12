@@ -127,6 +127,7 @@ func getRoutes(router *gin.Engine, db *gorm.DB) error {
 		c.JSON(http.StatusOK, gin.H{
 			"phoneNumber": user.PhoneNumber,
 			"sipUri":      user.SIPURI,
+			"sipPassword": user.SIPPassword, // only to show to user. it is not used by webrtc auth
 			"token":       token.Token,
 			"expire":      time.Now().Add(time.Duration(token.Expires) * time.Second),
 		})
