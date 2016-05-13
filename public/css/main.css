@@ -286,9 +286,16 @@ body, .container {
 nav h1{
     display: inline-block;
     margin-left: 20px;
+	font-size: 14pt;
+    padding-top: 6px;
 }
 
 .fa {
 	margin-top: 8px;
 }
 
+nav li a {
+	display: inline-block;
+	color: #FFF;
+	text-decoration: initial !important;
+}
