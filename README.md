@@ -68,5 +68,5 @@ Run `heroku open` to see home page of the app in the browser
 
 ## Docker notes
 
-You can use this app inside docker containers. The app tries to build connection string to db using environment variables `"DB_PORT_5432_TCP_ADDR` and `"DB_PORT_5432_TCP_PORT`.
+You can use this app inside docker containers. The app tries to build connection string to db using environment variables `DB_PORT_5432_TCP_ADDR` and `DB_PORT_5432_TCP_PORT`.
 So you can pass option `--link your-postgress-container:db` to `docker run` and the app will connect to database itself.
