@@ -33,7 +33,7 @@ Before running export next environment variables :
 
 ```CATAPULT_USER_ID```, ```CATAPULT_API_TOKEN```, ```CATAPULT_API_TOKEN``` - auth data for Catapult API (to search and reserve a phone number, etc)
 
-Set environment variable `DATABASE_URL` with connection string to existing PostgresSQL database.
+Set environment variable `DATABASE_URL` with connection string to existing PostgresSQL database (and `TEST_DATABASE_URL` if you are going to run tests).
 
 Install `godep` via `go get github.com/tools/godep` if need.
 
