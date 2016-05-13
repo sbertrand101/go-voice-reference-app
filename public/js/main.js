@@ -241,6 +241,11 @@
 			mediaConstraints: {
 				audio: true,
 				video: false
+			},
+			pcConfig: {
+				iceServers: [
+					{ urls: ['stun:stun.registration.bandwidth.com'/*, 'stun:stun.l.google.com:19302'*/] } // uncomment this code if it doesn't help
+				]
 			}
 		};
 		if (phone) {
@@ -248,9 +253,7 @@
 		}
 		phone = new JsSIP.UA({
 			'uri': sipData.sipUri,
-			'outbound_proxy_set': 'wss://webrtc.registration.bandwidth.com:10443',
-			'stun_server': 'stun:stun.registration.bandwidth.com', //default value is 'stun:stun.l.google.com:19302'
-			'trace_sip': true
+			'ws_servers': 'wss://webrtc.registration.bandwidth.com:10443'
 		});
 		phone.registrator().setExtraHeaders([sipAuthHeader]);
 
