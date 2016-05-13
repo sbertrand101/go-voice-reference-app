@@ -15,6 +15,14 @@ func main() {
 	router.Use(catapultMiddleware) // make CatapultAPI available for all routes
 	connectionString := os.Getenv("DATABASE_URL")
 	if connectionString == "" {
+		// Docker's links support
+		host := os.Getenv("DB_PORT_5432_TCP_ADDR")
+		port := os.Getenv("DB_PORT_5432_TCP_PORT")
+		if host != "" && port != "" {
+			connectionString = fmt.Sprintf("postgresql://postgres@%s:%s/postgres?sslmode=disable", host, port)
+		}
+	}
+	if connectionString == "" {
 		connectionString = "postgresql://postgres@localhost/golang_voice_reference_app?sslmode=disable"
 	}
 	db, err := gorm.Open("postgres", connectionString)

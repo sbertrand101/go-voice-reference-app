@@ -98,6 +98,14 @@ func readText(t *testing.T, r io.Reader) string {
 func openDBConnection(t *testing.T) *gorm.DB {
 	connectionString := os.Getenv("TEST_DATABASE_URL")
 	if connectionString == "" {
+		// to use with Docker's links
+		host := os.Getenv("DB_PORT_5432_TCP_ADDR")
+		port := os.Getenv("DB_PORT_5432_TCP_PORT")
+		if host != "" && port != "" {
+			connectionString = fmt.Sprintf("postgresql://postgres@%s:%s/postgres?sslmode=disable", host, port)
+		}
+	}
+	if connectionString == "" {
 		connectionString = "postgresql://postgres@localhost/golang_voice_reference_app_test?sslmode=disable"
 	}
 	db, err := gorm.Open("postgres", connectionString)
