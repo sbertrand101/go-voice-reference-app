@@ -12,6 +12,7 @@ import (
 	"github.com/bandwidthcom/go-bandwidth"
 	"github.com/gin-gonic/gin"
 	"github.com/jinzhu/gorm"
+	"strings"
 )
 
 // RegisterForm is used on used registering
@@ -137,7 +138,7 @@ func getRoutes(router *gin.Engine, db *gorm.DB) error {
 		form := &CallbackForm{}
 		api := c.MustGet("catapultAPI").(catapultAPIInterface)
 		err := c.Bind(form)
-		debugf("Catapult Event: %v\n", form)
+		debugf("Catapult Event: %#v\n", *form)
 		if err != nil {
 			setError(c, http.StatusBadRequest, err)
 			return
@@ -145,18 +146,24 @@ func getRoutes(router *gin.Engine, db *gorm.DB) error {
 		user := &User{}
 		if !db.First(user, "sip_uri = ? OR phone_number = ? OR phone_number = ?", form.From, form.From, form.To).RecordNotFound() {
 			if form.EventType == "answer" {
-				debugf("Answered %s -> %s\n", form.From, form.To)
 				if form.To == user.PhoneNumber {
-					debugf("Transfering incoming call  to  %s\n", user.SIPURI)
+					debugf("Transfering incoming call  to  %q\n", user.SIPURI)
+					callerID := form.From
+					anotherUser := &User{}
+					if strings.Index(callerID, "sip:") == 0 && !db.First(anotherUser, "sip_uri = ?", callerID).RecordNotFound() {
+						// try to use phone number for caller id instead of sip uri
+						callerID = anotherUser.PhoneNumber
+					}
+					debugf("Using caller id %q\n", callerID)
 					api.UpdateCall(form.CallID, &bandwidth.UpdateCallData{
 						State:            "transferring",
 						TransferTo:       user.SIPURI,
-						TransferCallerID: form.From,
+						TransferCallerID: callerID,
 					})
 					return
 				}
 				if form.From == user.SIPURI {
-					debugf("Transfering outgoing call to  %s\n", form.To)
+					debugf("Transfering outgoing call to  %q\n", form.To)
 					api.UpdateCall(form.CallID, &bandwidth.UpdateCallData{
 						State:            "transferring",
 						TransferTo:       form.To,

@@ -308,6 +308,41 @@ func TestRouteCallCallbackIncomingCall(t *testing.T) {
 	api.AssertExpectations(t)
 }
 
+func TestRouteCallCallbackIncomingCallSipToSip(t *testing.T) {
+	api := &fakeCatapultAPI{}
+	db := openDBConnection(t)
+	defer db.Close()
+	user1 := &User{
+		AreaCode:    "910",
+		SIPURI:      "sip:i1test@test.com",
+		PhoneNumber: "+1234567801",
+		UserName:    "i1user",
+	}
+	user1.SetPassword("123456")
+	db.Save(user1)
+	user2 := &User{
+		AreaCode:    "910",
+		SIPURI:      "sip:i2test@test.com",
+		PhoneNumber: "+1234567802",
+		UserName:    "i2user",
+	}
+	user2.SetPassword("123456")
+	db.Save(user2)
+	api.On("UpdateCall", "callID", &bandwidth.UpdateCallData{
+		State:            "transferring",
+		TransferTo:       "sip:i1test@test.com",
+		TransferCallerID: "+1234567802",
+	})
+	w := makeRequest(t, api, db, http.MethodPost, "/callCallback", "", &CallbackForm{
+		CallID:    "callID",
+		EventType: "answer",
+		From:      "sip:i2test@test.com",
+		To:        "+1234567801",
+	})
+	assert.Equal(t, http.StatusOK, w.Code)
+	api.AssertExpectations(t)
+}
+
 func TestRouteCallCallbackWithUnknownNumber(t *testing.T) {
 	api := &fakeCatapultAPI{}
 	db := openDBConnection(t)
