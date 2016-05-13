@@ -2,23 +2,20 @@ html, body, #body>div {
   height: 100%;
 }
 
-body, #body, #body>div {
+body, .container {
 	display: flex;
 	flex-direction: column;
 }
 
-.bw-body, .bw-body-content {
-	display: block;
-}
 
-#body, #body>div {
+ .container {
   flex-grow: 1;
+  padding: 20px;
 }
 
 .fill-free-space {
 	flex-grow: 1;
 }
-
 
 .well {
 	background: #F6FBFE;
@@ -47,7 +44,7 @@ body, #body, #body>div {
 	padding-top: 10px;
 }
 
-.register-link{
+.register-link, .login-link{
 	margin-top: 50px;
 }
 
@@ -84,6 +81,9 @@ body, #body, #body>div {
     margin: 0px 25px 0px 0px;
     float: left;
 }
+#callInfoNumber, #incomingCallNumber {
+	font-size: 120%;
+}
 #answer, #hangUp, #reject, #connectCall, #mute {
     color: #FFF;
     background-color: #389400;
@@ -108,7 +108,6 @@ body, #body, #body>div {
 #hangUp {
     background-color: #A90002;
 	float: right;
-	padding-top: 8px;
 }
 #reject {
     background-color: #FFF;
@@ -147,8 +146,8 @@ body, #body, #body>div {
 }
 #dialPad {
     width: 240px;
-    height: 390px;
-    margin:0 auto;
+    height: 330px;
+    margin: 80px auto 0px auto;
 }
 #dialPad div {
     float: left;
@@ -245,19 +244,18 @@ body, #body, #body>div {
     margin-top: 2px;
 }
 
-#connectCall, #toField {
-	width: 280px;
+#connectCall {
+	width: 100%;
 }
 
 #answer, #reject, #connectCall {
 	display: inline-block;
-    padding-top: 8px;
 }
 
 #phoneNumber {
 	text-align: center;
     margin-bottom: 10px;
-    font-size: 110%;
+    font-size: 20pt;
 }
 
 #sipDetailsLink {
@@ -266,9 +264,38 @@ body, #body, #body>div {
 }
 
 #sipDetails {
-	font-size: 85%;
+	font-size: 95%;
 }
 
 #sipDetails .title {
 	font-weight: bold;
+}
+
+#logOut[hidden]{
+	display: none;
+}
+
+.features{
+	font-weight: bold;
+}
+
+.unsupported-browser {
+	font-size: 110%;
+}
+
+nav h1{
+    display: inline-block;
+    margin-left: 20px;
+	font-size: 14pt;
+    padding-top: 6px;
+}
+
+.fa {
+	margin-top: 8px;
+}
+
+nav li a {
+	display: inline-block;
+	color: #FFF;
+	text-decoration: initial !important;
 }

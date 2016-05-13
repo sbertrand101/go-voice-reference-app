@@ -1,16 +1,5 @@
 /* LESS Document */
-@font-face {
-  font-family: semibold;
-  src: url("fonts/GarageFonts%20-%20FreightSans%20Pro%20Semibold.otf") format("opentype");
-}
-@font-face {
-  font-family: medium;
-  src: url("fonts/GarageFonts%20-%20FreightSans%20Pro%20Medium.otf") format("opentype");
-}
-@font-face {
-  font-family: light;
-  src: url("fonts/GarageFonts%20-%20FreightSans%20Pro%20Light.otf") format("opentype");
-}
+/* LESS Document */
 html,
 body {
   margin: 0;
@@ -138,6 +127,24 @@ a {
   text-decoration: underline;
   color: #008db1;
 }
+.buttons {
+  padding: 2em;
+}
+/* LESS Document */
+/* LESS Document */
+@font-face {
+  font-family: semibold;
+  src: url("fonts/GarageFonts%20-%20FreightSans%20Pro%20Semibold.otf") format("opentype");
+}
+@font-face {
+  font-family: medium;
+  src: url("fonts/GarageFonts%20-%20FreightSans%20Pro%20Medium.otf") format("opentype");
+}
+@font-face {
+  font-family: light;
+  src: url("fonts/GarageFonts%20-%20FreightSans%20Pro%20Light.otf") format("opentype");
+}
+/* LESS Document */
 nav {
   width: 100%;
   height: 65px;
@@ -181,12 +188,24 @@ nav .cta:hover {
 #subNav li:last-child {
   padding-right: 0px;
 }
+.navHeader {
+  background-color: #f7f7f7;
+  width: 100%;
+  height: 80px;
+  margin: 0;
+}
+.navHeader h1 {
+  font-size: 1.8em;
+  margin: 0 0 0 100px;
+  padding: 30px 0px 0px 0px;
+}
 #dashboardNav {
   width: 100%;
-  height: 145px;
+  height: 62px;
   background-color: #f7f7f7;
   color: #3a455c;
   border-bottom: 1px solid #e1e1e1;
+  z-index: 1;
 }
 #dashboardNav h1 {
   font-size: 1.8em;
@@ -202,7 +221,7 @@ nav .cta:hover {
 }
 #dashboardNav li {
   line-height: 10px;
-  padding: 20px 0px 30px 0px;
+  padding: 25px 0px 25px 0px;
   margin-right: 40px;
   float: left;
   text-transform: uppercase;
@@ -215,6 +234,12 @@ nav .cta:hover {
 #dashboardNav li:first-child {
   padding-left: 0px;
 }
+#navSpacing {
+  display: none;
+  width: 100%;
+  height: 63px;
+}
+/* LESS Document */
 .hero {
   width: 100%;
   height: auto;
@@ -263,6 +288,7 @@ nav .cta:hover {
   text-align: center;
   font-size: 1.8em;
 }
+/* LESS Document */
 .basicForm {
   margin: 3em auto;
   width: 455px;
@@ -293,7 +319,7 @@ nav .cta:hover {
   -webkit-appearance: none;
   width: 100%;
   background-color: #FFF;
-  background: url(selectArrow.png) no-repeat right #FFF;
+  background: url(images/selectArrow.png) no-repeat right #FFF;
 }
 .basicForm select:required:invalid {
   color: #999;
@@ -393,6 +419,7 @@ input[type=checkbox]:checked + label:after {
   /* This is a "heavy" checkmark. Change to 2713 for a light one. */
   font-size: 10px;
 }
+/* LESS Document */
 #ccProgress,
 #ccForm {
   width: calc(50% - 14em);
@@ -465,6 +492,7 @@ input[type=checkbox]:checked + label:after {
   margin: 0 auto;
   vertical-align: middle;
 }
+/* LESS Document */
 .leftNavDashboard {
   width: 100%;
   height: 100%;
@@ -582,7 +610,4 @@ input[type=checkbox]:checked + label:after {
   margin-left: 1.875em;
   margin-right: 1em;
   display: inline-block;
-}
-.buttons {
-  padding: 2em;
 }

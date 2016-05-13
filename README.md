@@ -33,7 +33,7 @@ Before running export next environment variables :
 
 ```CATAPULT_USER_ID```, ```CATAPULT_API_TOKEN```, ```CATAPULT_API_TOKEN``` - auth data for Catapult API (to search and reserve a phone number, etc)
 
-Set environment variable `DATABASE_URL` with connection string to existing PostgresSQL database.
+Set environment variable `DATABASE_URL` with connection string to existing PostgresSQL database (and `TEST_DATABASE_URL` if you are going to run tests).
 
 Install `godep` via `go get github.com/tools/godep` if need.
 
@@ -66,3 +66,7 @@ Run `git push heroku master` to deploy this project.
 
 Run `heroku open` to see home page of the app in the browser
 
+## Docker notes
+
+You can use this app inside docker containers. The app tries to build connection string to db using environment variables `DB_PORT_5432_TCP_ADDR` and `DB_PORT_5432_TCP_PORT`.
+So you can pass option `--link your-postgress-container:db` to `docker run` and the app will connect to database itself.

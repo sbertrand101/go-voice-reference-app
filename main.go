@@ -13,9 +13,14 @@ func main() {
 	router := gin.Default()
 	router.NoRoute(static.ServeRoot("/", "./public")) //serve static files for other routes
 	router.Use(catapultMiddleware) // make CatapultAPI available for all routes
-	connectionString := os.Getenv("DATABASE_URI")
+	connectionString := os.Getenv("DATABASE_URL")
 	if connectionString == "" {
-		connectionString = os.Getenv("DATABASE_URL")
+		// Docker's links support
+		host := os.Getenv("DB_PORT_5432_TCP_ADDR")
+		port := os.Getenv("DB_PORT_5432_TCP_PORT")
+		if host != "" && port != "" {
+			connectionString = fmt.Sprintf("postgresql://postgres@%s:%s/postgres?sslmode=disable", host, port)
+		}
 	}
 	if connectionString == "" {
 		connectionString = "postgresql://postgres@localhost/golang_voice_reference_app?sslmode=disable"
