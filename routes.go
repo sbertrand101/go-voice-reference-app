@@ -138,13 +138,13 @@ func getRoutes(router *gin.Engine, db *gorm.DB) error {
 		form := &CallbackForm{}
 		api := c.MustGet("catapultAPI").(catapultAPIInterface)
 		err := c.Bind(form)
-		debugf("Catapult Event: %#v\n", *form)
+		debugf("Catapult Event: %+v\n", *form)
 		if err != nil {
 			setError(c, http.StatusBadRequest, err)
 			return
 		}
 		user := &User{}
-		if !db.First(user, "sip_uri = ? OR phone_number = ? OR phone_number = ?", form.From, form.From, form.To).RecordNotFound() {
+		if !db.First(user, "sip_uri = ? OR phone_number = ?", form.From, form.To).RecordNotFound() {
 			if form.EventType == "answer" {
 				if form.To == user.PhoneNumber {
 					debugf("Transfering incoming call  to  %q\n", user.SIPURI)
