@@ -272,3 +272,21 @@ body, #body, #body>div {
 #sipDetails .title {
 	font-weight: bold;
 }
+
+#logOut{
+	display: block;
+	float: right;
+}
+
+#logOut[hidden]{
+	display: none;
+}
+
+.features{
+	font-weight: bold;
+}
+
+.unsupported-browser {
+	font-size: 110%;
+}
+

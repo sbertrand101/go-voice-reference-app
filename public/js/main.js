@@ -1,4 +1,21 @@
 (function() {
+	var missingFeatures = [];
+
+	if (!JsSIP.rtcninja.hasWebRTC()) {
+		missingFeatures.push("WebRTC");
+	}
+
+	if (!window.WebSocket) {
+		missingFeatures.push("WebSockets");
+	}
+
+	if (!window.fetch) {
+		var fetchApi = document.createElement('script');
+		fetchApi.setAttribute('src', '//cdnjs.cloudflare.com/ajax/libs/fetch/1.0.0/fetch.min.js');
+		document.getElementsByTagName('head')[0].appendChild(fetchApi);
+	}
+
+
 	HTMLElement.prototype.show = function(){
 		this.removeAttribute('hidden');
 	}
@@ -13,8 +30,9 @@
 	var registerForm = document.getElementById('registerForm');
 	var phoneContainer = document.getElementById('phone');
 	var connecting = document.getElementById('connecting');
+	var unsupportedBrowser = document.getElementById('unsupportedBrowser');
 
-	var screens = [loginForm, registerForm, connecting, phoneContainer];
+	var screens = [loginForm, registerForm, connecting, phoneContainer, unsupportedBrowser];
 
 	var incomingCallAudio = document.getElementById('incomingCallAudio');
 	var toField = document.getElementById('toField');
@@ -24,8 +42,15 @@
 	var sipUserName = document.getElementById('sipUserName');
 	var sipDomain = document.getElementById('sipDomain');
 	var sipPassword = document.getElementById('sipPassword');
+	var logOut = document.getElementById('logOut');
 
 	var phone, session, sipAuthHeader, callOptions;
+
+	if (missingFeatures.length > 0) {
+		unsupportedBrowser.getElementsByClassName('features')[0].innerHTML = missingFeatures.join(', ');
+		switchToScreen(unsupportedBrowser);
+		return;
+	}
 
 	loginForm.getElementsByTagName('a')[0].addEventListener('click', function(e){
 		e.preventDefault();
@@ -110,6 +135,8 @@
 		sipDetails.show();
 	});
 
+	logOut.addEventListener('click', makeLogOut);
+
 	toField.addEventListener('keypress', function(e){
 		if(e.which === 13){//enter
 			makeCall();
@@ -177,12 +204,14 @@
 			return switchToScreen(loginForm);
 		}
 		return refreshAuthData().then(function(){
+			logOut.show();
 			fn();
-		}, function(err){
-			setError(document, err);
-			localStorage.removeItem('authData')
-			switchToScreen(loginForm);
-		});
+		}, makeLogOut);
+	}
+
+	function makeLogOut() {
+		localStorage.removeItem('authData')
+		window.location.reload();
 	}
 
 	function refreshAuthData() {

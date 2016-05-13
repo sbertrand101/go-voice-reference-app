@@ -15,10 +15,16 @@
 				<img class="bw-logo" src="//s3.amazonaws.com/bandwidth-public-assets/bw_logo_white.svg"/>
 				<h1 class="bw-title">Phone</h1>
 			</div>
+			<a id="logOut" href="#" class="" hidden>Log Out</a>
 		</header>
 		<div class="bw-body">
 			<div class="bw-body-content">
 				<div class="error" hidden></div>
+				<section className="formContainer" id="unsupportedBrowser" hidden>
+					<div class="unsupported-browser">
+						Sorry, your browser doesn't support required feature(s): <span class="features"></span>.  Try to use another modern browser or newer version of this one.
+					</div>
+				</section>
 				<section className="formContainer" id="loginForm" hidden>
 					<form className="basicForm fill-free-space">
 						<h1>Sign In</h1>
