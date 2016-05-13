@@ -96,7 +96,7 @@ func readText(t *testing.T, r io.Reader) string {
 }
 
 func openDBConnection(t *testing.T) *gorm.DB {
-	connectionString := os.Getenv("DATABASE_URI")
+	connectionString := os.Getenv("TEST_DATABASE_URL")
 	if connectionString == "" {
 		connectionString = "postgresql://postgres@localhost/golang_voice_reference_app_test?sslmode=disable"
 	}
