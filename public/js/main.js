@@ -57,6 +57,11 @@
 		switchToScreen(registerForm);
 	});
 
+	registerForm.getElementsByTagName('a')[0].addEventListener('click', function(e){
+		e.preventDefault();
+		switchToScreen(loginForm);
+	});
+
 	loginForm.getElementsByTagName('form')[0].addEventListener('submit', function(e){
 		e.preventDefault();
 		var button = e.target.getElementsByTagName('button')[0];
@@ -237,7 +242,7 @@
 		if (phone) {
 			phone.stop();
 		}
-		// JsSIP.debug.enable('JsSIP:*');
+		JsSIP.debug.enable('JsSIP:*');
 		phone = new JsSIP.UA({
 			'uri': sipData.sipUri,
 			'ws_servers': 'wss://webrtc.registration.bandwidth.com:10443',
@@ -310,8 +315,7 @@
 			if(session.isInProgress()){
 				if(session.direction === 'incoming'){
 					incomingCallAudio.play();
-					var m = /sip\:(\+?\d+)@/.exec(session.remote_identity.uri)
-					document.getElementById('incomingCallNumber').innerHTML = m[1];
+					document.getElementById('incomingCallNumber').innerHTML = session.remote_identity.uri.user;
 					document.getElementById('incomingCall').show();
 					document.getElementById('callControl').hide();
 					document.getElementById('incomingCall').show();
