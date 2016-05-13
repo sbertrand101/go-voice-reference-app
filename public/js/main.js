@@ -248,7 +248,9 @@
 		}
 		phone = new JsSIP.UA({
 			'uri': sipData.sipUri,
-			'ws_servers': 'wss://webrtc.registration.bandwidth.com:10443',
+			'outbound_proxy_set': 'wss://webrtc.registration.bandwidth.com:10443',
+			'stun_server': 'stun:stun.registration.bandwidth.com', //default value is 'stun:stun.l.google.com:19302'
+			'trace_sip': true
 		});
 		phone.registrator().setExtraHeaders([sipAuthHeader]);
 
