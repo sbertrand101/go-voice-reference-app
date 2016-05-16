@@ -37,6 +37,7 @@
 	var screens = [loginForm, registerForm, connecting, phoneContainer, unsupportedBrowser];
 
 	var incomingCallAudio = document.getElementById('incomingCallAudio');
+	var remoteAudio = document.getElementById('remoteAudio');
 	var toField = document.getElementById('toField');
 	var phoneNumber = document.getElementById('phoneNumber');
 	var sipDetails = document.getElementById('sipDetails');
@@ -248,7 +249,7 @@
 		}
 		phone = new JsSIP.UA({
 			'uri': sipData.sipUri,
-			'ws_servers': 'wss://webrtc.registration.bandwidth.com:10443',
+			'ws_servers': 'wss://webrtc.registration.bandwidth.com:10443'
 		});
 		phone.registrator().setExtraHeaders([sipAuthHeader]);
 
@@ -296,12 +297,12 @@
 			session.on('failed', function(){
 				setSession(null);
 			});
-			session.on('accepted', function(){
-				incomingCallAudio.pause();
-				updateDialerUI();
-			});
 			session.on('confirmed', function(){
 				updateDialerUI();
+			});
+			session.on('addstream', function(e){
+				incomingCallAudio.pause();
+				remoteAudio.src = window.URL.createObjectURL(e.stream);
 			});
 		}
 		updateDialerUI();
