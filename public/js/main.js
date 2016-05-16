@@ -153,9 +153,8 @@
 
 	var i, buttons = document.getElementById('inCallButtons').getElementsByClassName('dialpad-char');
 	for(i = 0; i < buttons.length; i ++) {
-		var button = buttons[i];
-		button.addEventListener('click', function (e) {
-			var digit = button.getAttribute('data-value');
+		buttons[i].addEventListener('click', function (e) {
+			var digit = e.target.getAttribute('data-value');
 			console.log("Send DTMF: " + digit);
 			session.sendDTMF(digit);
 		});
