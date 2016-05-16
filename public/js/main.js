@@ -37,6 +37,7 @@
 	var screens = [loginForm, registerForm, connecting, phoneContainer, unsupportedBrowser];
 
 	var incomingCallAudio = document.getElementById('incomingCallAudio');
+	var remoteAudio = document.getElementById('remoteAudio');
 	var toField = document.getElementById('toField');
 	var phoneNumber = document.getElementById('phoneNumber');
 	var sipDetails = document.getElementById('sipDetails');
@@ -241,11 +242,6 @@
 			mediaConstraints: {
 				audio: true,
 				video: false
-			},
-			pcConfig: {
-				iceServers: [
-					{ urls: ['stun:stun.registration.bandwidth.com'/*, 'stun:stun.l.google.com:19302'*/] } // uncomment this code if it doesn't help
-				]
 			}
 		};
 		if (phone) {
@@ -301,12 +297,12 @@
 			session.on('failed', function(){
 				setSession(null);
 			});
-			session.on('accepted', function(){
-				incomingCallAudio.pause();
-				updateDialerUI();
-			});
 			session.on('confirmed', function(){
 				updateDialerUI();
+			});
+			session.on('addstream', function(e){
+				incomingCallAudio.pause();
+				remoteAudio.src = window.URL.createObjectURL(e.stream);
 			});
 		}
 		updateDialerUI();
