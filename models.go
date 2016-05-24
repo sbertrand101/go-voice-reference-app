@@ -1,9 +1,11 @@
 package main
 
 import (
+	"fmt"
+	"time"
+
 	"github.com/jinzhu/gorm"
 	"golang.org/x/crypto/bcrypt"
-	"fmt"
 )
 
 // MinPasswordLength defines minimal length of password
@@ -14,13 +16,25 @@ const salt = "cWWRcK0.8^eUgu_!V@@K6D^;#,jL+Yl"
 // User model
 type User struct {
 	gorm.Model
-	UserName     string `gorm:"type:varchar(64);not null;unique_index"`
-	PasswordHash []byte
-	AreaCode     string `gorm:"type:char(3)"`
-	PhoneNumber  string `gorm:"type:varchar(32);unique_index"`
-	EndpointID   string `gorm:"column:endpoint_id;type:varchar(64)"`
-	SIPURI       string `gorm:"column:sip_uri;type:varchar(1024);index"`
-	SIPPassword  string `gorm:"column:sip_password;type:varchar(128)"`
+	UserName          string `gorm:"type:varchar(64);not null;unique_index"`
+	PasswordHash      []byte
+	AreaCode          string `gorm:"type:char(3)"`
+	PhoneNumber       string `gorm:"type:varchar(32);unique_index"`
+	EndpointID        string `gorm:"column:endpoint_id;type:varchar(64)"`
+	SIPURI            string `gorm:"column:sip_uri;type:varchar(1024);index"`
+	SIPPassword       string `gorm:"column:sip_password;type:varchar(128)"`
+	GreatingURL       string `gorm:"column:greating_url;type:varchar(1024)"`
+	VoiceMailMessages []VoiceMailMessage
+}
+
+// VoiceMailMessage model
+type VoiceMailMessage struct {
+	gorm.Model
+	User      User `gorm:"ForeignKey:UserID"`
+	UserID    uint
+	StartTime time.Time `gorm:"index"`
+	EndTime   time.Time
+	MediaURL  string `gorm:"column:media_url;type:varchar(1024)"`
 }
 
 // SetPassword sets hash for password
@@ -40,5 +54,5 @@ func (u *User) ComparePasswords(password string) bool {
 
 // AutoMigrate updates tables in db using models definitions
 func AutoMigrate(db *gorm.DB) *gorm.DB {
-	return db.AutoMigrate(&User{})
+	return db.AutoMigrate(&User{}, &VoiceMailMessage{})
 }

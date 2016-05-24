@@ -8,11 +8,12 @@ import (
 	"errors"
 	"net/http"
 
+	"strings"
+
 	"github.com/appleboy/gin-jwt"
 	"github.com/bandwidthcom/go-bandwidth"
 	"github.com/gin-gonic/gin"
 	"github.com/jinzhu/gorm"
-	"strings"
 )
 
 // RegisterForm is used on used registering
@@ -25,11 +26,13 @@ type RegisterForm struct {
 
 // CallbackForm is used for call callbacks
 type CallbackForm struct {
-	From      string `json:"from"`
-	To        string `json:"to"`
-	EventType string `json:"eventType"`
-	CallID    string `json:"callId"`
-	Tag       string `json:"tag"`
+	From        string `json:"from"`
+	To          string `json:"to"`
+	State       string `json:"state"`
+	EventType   string `json:"eventType"`
+	CallID      string `json:"callId"`
+	Tag         string `json:"tag"`
+	RecordingID string `json:"recordingId"`
 }
 
 func getRoutes(router *gin.Engine, db *gorm.DB) error {
@@ -155,11 +158,24 @@ func getRoutes(router *gin.Engine, db *gorm.DB) error {
 						callerID = anotherUser.PhoneNumber
 					}
 					debugf("Using caller id %q\n", callerID)
-					api.UpdateCall(form.CallID, &bandwidth.UpdateCallData{
+					transferedCallID, _ := api.UpdateCall(form.CallID, &bandwidth.UpdateCallData{
 						State:            "transferring",
 						TransferTo:       user.SIPURI,
 						TransferCallerID: callerID,
+						CallbackURL:      fmt.Sprintf("http://%s/transferCallback", c.Request.Host), // to handle redirection to voice mail
 					})
+					go func() {
+						debugf("Waiting for answer call")
+						time.Sleep(15 * time.Second)
+						call, _ := api.GetCall(transferedCallID)
+						if call.State == "started" {
+							// move to voice mail
+							api.UpdateCall(transferedCallID, &bandwidth.UpdateCallData{
+								State: "active",
+								Tag:   strconv.FormatUint(uint64(user.ID), 10),
+							})
+						}
+					}()
 					return
 				}
 				if form.From == user.SIPURI {
@@ -176,9 +192,60 @@ func getRoutes(router *gin.Engine, db *gorm.DB) error {
 		c.String(http.StatusOK, "")
 	})
 
+	router.POST("/transferCallback", func(c *gin.Context) {
+		api := c.MustGet("catapultAPI").(catapultAPIInterface)
+		form := &CallbackForm{}
+		err := c.Bind(form)
+		debugf("Catapult Event for transfered call: %+v\n", *form)
+		if err != nil {
+			setError(c, http.StatusBadRequest, err)
+			return
+		}
+		if form.Tag != "" {
+			handleVoiceMailEvent(form, db, api)
+		}
+		c.String(http.StatusOK, "")
+	})
+
 	router.StaticFile("/", "./public/index.html")
 
 	return nil
+}
+
+func handleVoiceMailEvent(form *CallbackForm, db *gorm.DB, api catapultAPIInterface) {
+	debugf("Handle voice mail event")
+	user := &User{}
+	userID, _ := strconv.ParseUint(form.Tag, 10, 32)
+	if !db.First(user, uint(userID)).RecordNotFound() {
+		debugf("User with ID %s is not found for voice mail event", form.Tag)
+		return
+	}
+	switch form.EventType {
+	case "answer":
+		playGreeting(form.CallID, user, api)
+		api.PlayAudioToCall(form.CallID, "https://s3.amazonaws.com/bwdemos/beep.mp3")
+		api.UpdateCall(form.CallID, &bandwidth.UpdateCallData{RecordingEnabled: true})
+		break
+	case "recording":
+		if form.State == "complete" {
+			debugf("Recording %s has been completed.", form.RecordingID)
+			recording, _ := api.GetRecording(form.RecordingID)
+			db.Create(&VoiceMailMessage{
+				MediaURL:  recording.Media,
+				StartTime: parseTime(recording.StartTime),
+				EndTime:   parseTime(recording.EndTime),
+				UserID:    user.ID,
+			})
+		}
+	}
+}
+
+func playGreeting(callID string, user *User, api catapultAPIInterface) {
+	if user.GreatingURL == "" {
+		api.SpeakSentenceToCall(callID, fmt.Sprintf("Hello. You have called to %s. Please leave a message after beep.", user.PhoneNumber))
+	} else {
+		api.PlayAudioToCall(callID, user.GreatingURL)
+	}
 }
 
 func setErrorMessage(c *gin.Context, code int, message string) {
@@ -197,6 +264,11 @@ func setError(c *gin.Context, code int, err error, message ...string) {
 		errorMessage = err.Error()
 	}
 	setErrorMessage(c, code, errorMessage)
+}
+
+func parseTime(isoTime string) time.Time {
+	time, _ := time.Parse("RFC3339", isoTime)
+	return time
 }
 
 func debugf(format string, a ...interface{}) {

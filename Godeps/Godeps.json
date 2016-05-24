@@ -9,7 +9,7 @@
 		},
 		{
 			"ImportPath": "github.com/bandwidthcom/go-bandwidth",
-			"Rev": "36e076a0ba4a5480616608f8bc7392ec29ba388a"
+			"Rev": "8cca1fb347d14ab58aad821887b188ccaa92b133"
 		},
 		{
 			"ImportPath": "github.com/davecgh/go-spew/spew",

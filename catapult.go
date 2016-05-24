@@ -28,7 +28,12 @@ type catapultAPIInterface interface {
 	CreatePhoneNumber(areaCode string) (string, error)
 	CreateSIPAccount() (*sipAccount, error)
 	CreateSIPAuthToken(endpointID string) (*bandwidth.DomainEndpointToken, error)
-	UpdateCall(callID string, data *bandwidth.UpdateCallData) error
+	UpdateCall(callID string, data *bandwidth.UpdateCallData) (string, error)
+	GetCall(callID string) (*bandwidth.Call, error)
+	PlayAudioToCall(callID string, url string) error
+	SpeakSentenceToCall(callID string, text string) error
+	CreateGather(callID string, data *bandwidth.CreateGatherData) (string, error)
+	GetRecording(recordingID string) (*bandwidth.Recording, error)
 }
 
 func newCatapultAPI(context *gin.Context) (*catapultAPI, error) {
@@ -151,8 +156,33 @@ func (api *catapultAPI) CreateSIPAuthToken(endpointID string) (*bandwidth.Domain
 	return api.client.CreateDomainEndpointToken(domainID, endpointID)
 }
 
-func (api *catapultAPI) UpdateCall(callID string, data *bandwidth.UpdateCallData) error {
+func (api *catapultAPI) UpdateCall(callID string, data *bandwidth.UpdateCallData) (string, error) {
 	return api.client.UpdateCall(callID, data)
+}
+
+func (api *catapultAPI) GetCall(callID string) (*bandwidth.Call, error) {
+	return api.client.GetCall(callID)
+}
+
+func (api *catapultAPI) PlayAudioToCall(callID string, url string) error {
+	return api.client.PlayAudioToCall(callID, &bandwidth.PlayAudioData{FileURL: url})
+}
+
+func (api *catapultAPI) SpeakSentenceToCall(callID string, text string) error {
+	return api.client.PlayAudioToCall(callID, &bandwidth.PlayAudioData{
+		Gender:   "female",
+		Locale:   "en_US",
+		Voice:    "julie",
+		Sentence: text,
+	})
+}
+
+func (api *catapultAPI) CreateGather(callID string, data *bandwidth.CreateGatherData) (string, error) {
+	return api.client.CreateGather(callID, data)
+}
+
+func (api *catapultAPI) GetRecording(recordingID string) (*bandwidth.Recording, error) {
+	return api.client.GetRecording(recordingID)
 }
 
 func catapultMiddleware(c *gin.Context) {
