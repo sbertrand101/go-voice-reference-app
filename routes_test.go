@@ -270,7 +270,7 @@ func TestRouteCallCallbackOutgoingCall(t *testing.T) {
 		State:            "transferring",
 		TransferTo:       "+1472583690",
 		TransferCallerID: "+1234567891",
-	})
+	}).Return("", nil)
 	w := makeRequest(t, api, db, http.MethodPost, "/callCallback", "", &CallbackForm{
 		CallID:    "callID",
 		EventType: "answer",
@@ -297,7 +297,8 @@ func TestRouteCallCallbackIncomingCall(t *testing.T) {
 		State:            "transferring",
 		TransferTo:       "sip:itest@test.com",
 		TransferCallerID: "+1472583688",
-	})
+		CallbackURL:      "http:///transferCallback",
+	}).Return("", nil)
 	w := makeRequest(t, api, db, http.MethodPost, "/callCallback", "", &CallbackForm{
 		CallID:    "callID",
 		EventType: "answer",
@@ -332,7 +333,8 @@ func TestRouteCallCallbackIncomingCallSipToSip(t *testing.T) {
 		State:            "transferring",
 		TransferTo:       "sip:i1test@test.com",
 		TransferCallerID: "+1234567802",
-	})
+		CallbackURL:      "http:///transferCallback",
+	}).Return("", nil)
 	w := makeRequest(t, api, db, http.MethodPost, "/callCallback", "", &CallbackForm{
 		CallID:    "callID",
 		EventType: "answer",
@@ -356,7 +358,6 @@ func TestRouteCallCallbackWithUnknownNumber(t *testing.T) {
 	assert.Equal(t, http.StatusOK, w.Code)
 	api.AssertNotCalled(t, "UpdateCall")
 }
-
 
 func makeRequest(t *testing.T, api catapultAPIInterface, db *gorm.DB, method, path, authToken string, body ...interface{}) *httptest.ResponseRecorder {
 	gin.SetMode(gin.TestMode)

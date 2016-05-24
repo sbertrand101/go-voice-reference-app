@@ -5,9 +5,9 @@ import (
 	"os"
 	"testing"
 
+	"github.com/bandwidthcom/go-bandwidth"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
-	"github.com/bandwidthcom/go-bandwidth"
 )
 
 func TestNewCatapultApi(t *testing.T) {
@@ -349,27 +349,29 @@ func TestCreateSIPAuthTokenFail2(t *testing.T) {
 func TestUpdateCall(t *testing.T) {
 	server, api := startMockCatapultServer(t, []RequestHandler{
 		RequestHandler{
-			PathAndQuery:  "/v1/users/userID/calls/123",
-			Method:        http.MethodPost,
+			PathAndQuery:     "/v1/users/userID/calls/123",
+			Method:           http.MethodPost,
 			EstimatedContent: `{"state":"transfering"}`,
+			HeadersToSend:    map[string]string{"Location": "/v1/users/userID/calls/567"},
 		},
 	})
 	defer server.Close()
-	api.UpdateCall("123", &bandwidth.UpdateCallData{
+	id, _ := api.UpdateCall("123", &bandwidth.UpdateCallData{
 		State: "transfering",
 	})
+	assert.Equal(t, "567", id)
 }
 
 func TestUpdateCallFail(t *testing.T) {
 	server, api := startMockCatapultServer(t, []RequestHandler{
 		RequestHandler{
-			PathAndQuery:  "/v1/users/userID/calls/123",
-			Method:        http.MethodPost,
+			PathAndQuery:     "/v1/users/userID/calls/123",
+			Method:           http.MethodPost,
 			StatusCodeToSend: http.StatusBadRequest,
 		},
 	})
 	defer server.Close()
-	err := api.UpdateCall("123", &bandwidth.UpdateCallData{
+	_, err := api.UpdateCall("123", &bandwidth.UpdateCallData{
 		State: "transfering",
 	})
 	assert.Error(t, err)
