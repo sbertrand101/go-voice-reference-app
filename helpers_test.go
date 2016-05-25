@@ -178,3 +178,8 @@ func (m *fakeCatapultAPI) CreateCall(data *bandwidth.CreateCallData) (string, er
 	args := m.Called(data)
 	return args.String(0), args.Error(1)
 }
+
+func (m *fakeCatapultAPI) DownloadMediaFile(name string) (io.ReadCloser, string, error) {
+	args := m.Called(name)
+	return args.Get(0).(io.ReadCloser), args.String(1), args.Error(2)
+}

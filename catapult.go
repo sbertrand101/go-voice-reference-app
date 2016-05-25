@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"io"
 	"math/rand"
 	"net/http"
 	"os"
@@ -35,6 +36,7 @@ type catapultAPIInterface interface {
 	CreateGather(callID string, data *bandwidth.CreateGatherData) (string, error)
 	GetRecording(recordingID string) (*bandwidth.Recording, error)
 	CreateCall(data *bandwidth.CreateCallData) (string, error)
+	DownloadMediaFile(name string) (io.ReadCloser, string, error)
 }
 
 func newCatapultAPI(context *gin.Context) (*catapultAPI, error) {
@@ -188,6 +190,10 @@ func (api *catapultAPI) GetRecording(recordingID string) (*bandwidth.Recording, 
 
 func (api *catapultAPI) CreateCall(data *bandwidth.CreateCallData) (string, error) {
 	return api.client.CreateCall(data)
+}
+
+func (api *catapultAPI) DownloadMediaFile(name string) (io.ReadCloser, string, error) {
+	return api.client.DownloadMediaFile(name)
 }
 
 func catapultMiddleware(c *gin.Context) {

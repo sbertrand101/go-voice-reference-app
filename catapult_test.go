@@ -5,6 +5,8 @@ import (
 	"os"
 	"testing"
 
+	"io/ioutil"
+
 	"github.com/bandwidthcom/go-bandwidth"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
@@ -545,6 +547,37 @@ func TestCreateCallFail(t *testing.T) {
 		From: "111",
 		To:   "222",
 	})
+	assert.Error(t, err)
+}
+
+func TestDownloadMediaFile(t *testing.T) {
+	server, api := startMockCatapultServer(t, []RequestHandler{
+		RequestHandler{
+			PathAndQuery:  "/v1/users/userID/media/test",
+			Method:        http.MethodGet,
+			ContentToSend: `123`,
+			HeadersToSend: map[string]string{"Content-Type": "text/plain"},
+		},
+	})
+	defer server.Close()
+	r, contentType, err := api.DownloadMediaFile("test")
+	defer r.Close()
+	assert.NoError(t, err)
+	assert.Equal(t, "text/plain", contentType)
+	b, _ := ioutil.ReadAll(r)
+	assert.Equal(t, "123\n", string(b))
+}
+
+func TestDownloadMediaFileFail(t *testing.T) {
+	server, api := startMockCatapultServer(t, []RequestHandler{
+		RequestHandler{
+			PathAndQuery:     "/v1/users/userID/media/test",
+			Method:           http.MethodGet,
+			StatusCodeToSend: http.StatusNotFound,
+		},
+	})
+	defer server.Close()
+	_, _, err := api.DownloadMediaFile("test")
 	assert.Error(t, err)
 }
 

@@ -328,6 +328,30 @@ func getRoutes(router *gin.Engine, db *gorm.DB) error {
 		c.JSON(http.StatusOK, list)
 	})
 
+	router.GET("/voiceMessages/:id/media", authMiddleware.MiddlewareFunc(), func(c *gin.Context) {
+		api := c.MustGet("catapultAPI").(catapultAPIInterface)
+		user := c.MustGet("user").(*User)
+		message := &VoiceMailMessage{}
+		err := db.Where("user_id = ? and id = ?", user.ID, c.Param("id")).First(message).Error
+		if err != nil {
+			setError(c, http.StatusBadGateway, err, "Error on getting voice message data")
+			return
+		}
+		parts := strings.Split(message.MediaURL, "/")
+		reader, contentType, err := api.DownloadMediaFile(parts[len(parts)-1])
+		if err != nil {
+			setError(c, http.StatusBadGateway, err, "Error on downloading media file")
+			return
+		}
+		defer reader.Close()
+		c.Header("Content-Type", contentType)
+		c.Stream(func(w io.Writer) bool {
+			length, _ := io.Copy(w, reader)
+			c.Header("Content-Length", strconv.FormatInt(length, 10))
+			return false
+		})
+	})
+
 	router.DELETE("/voiceMessages/:id", authMiddleware.MiddlewareFunc(), func(c *gin.Context) {
 		user := c.MustGet("user").(*User)
 		err := db.Where("user_id = ? and id = ?", user.ID, c.Param("id")).Delete(VoiceMailMessage{}).Error
