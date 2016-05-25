@@ -35,7 +35,7 @@ func TestRouteRegister(t *testing.T) {
 		URI:        "test@test.net",
 		Password:   "12345678",
 	}, nil)
-	w := makeRequest(t, api, db, http.MethodPost, "/register", "", data)
+	w := makeRequest(t, api, nil, db, http.MethodPost, "/register", "", data)
 	assert.Equal(t, http.StatusOK, w.Code)
 	api.AssertExpectations(t)
 	user := &User{}
@@ -59,7 +59,7 @@ func TestRouteRegisterFailWithMismatchedPaswords(t *testing.T) {
 	db := openDBConnection(t)
 	defer db.Close()
 
-	w := makeRequest(t, api, db, http.MethodPost, "/register", "", data)
+	w := makeRequest(t, api, nil, db, http.MethodPost, "/register", "", data)
 	assert.Equal(t, http.StatusBadRequest, w.Code)
 	api.AssertNotCalled(t, "CreatePhoneNumber")
 	api.AssertNotCalled(t, "CreateSIPAccount")
@@ -78,7 +78,7 @@ func TestRouteRegisterFailWithShortPassword(t *testing.T) {
 	db := openDBConnection(t)
 	defer db.Close()
 
-	w := makeRequest(t, api, db, http.MethodPost, "/register", "", data)
+	w := makeRequest(t, api, nil, db, http.MethodPost, "/register", "", data)
 	assert.Equal(t, http.StatusBadRequest, w.Code)
 	api.AssertNotCalled(t, "CreatePhoneNumber")
 	api.AssertNotCalled(t, "CreateSIPAccount")
@@ -95,7 +95,7 @@ func TestRouteRegisterFailWithMissingFields(t *testing.T) {
 	db := openDBConnection(t)
 	defer db.Close()
 
-	w := makeRequest(t, api, db, http.MethodPost, "/register", "", data)
+	w := makeRequest(t, api, nil, db, http.MethodPost, "/register", "", data)
 	assert.Equal(t, http.StatusBadRequest, w.Code)
 	api.AssertNotCalled(t, "CreatePhoneNumber")
 	api.AssertNotCalled(t, "CreateSIPAccount")
@@ -114,7 +114,7 @@ func TestRouteRegisterFailWithSameUser(t *testing.T) {
 	db := openDBConnection(t)
 	defer db.Close()
 	db.Create(&User{UserName: "user1", AreaCode: "910"})
-	w := makeRequest(t, api, db, http.MethodPost, "/register", "", data)
+	w := makeRequest(t, api, nil, db, http.MethodPost, "/register", "", data)
 	assert.Equal(t, http.StatusBadRequest, w.Code)
 	api.AssertNotCalled(t, "CreatePhoneNumber")
 	api.AssertNotCalled(t, "CreateSIPAccount")
@@ -131,7 +131,7 @@ func TestRouteRegisterFailWithFailedCreatePhoneNumber(t *testing.T) {
 	api.On("CreatePhoneNumber", "910").Return("", errors.New("Error"))
 	db := openDBConnection(t)
 	defer db.Close()
-	w := makeRequest(t, api, db, http.MethodPost, "/register", "", data)
+	w := makeRequest(t, api, nil, db, http.MethodPost, "/register", "", data)
 	assert.Equal(t, http.StatusBadGateway, w.Code)
 	api.AssertNotCalled(t, "CreateSIPAccount")
 	user := &User{}
@@ -150,7 +150,7 @@ func TestRouteRegisterFailWithFailedCreateSIPAccount(t *testing.T) {
 	api.On("CreateSIPAccount").Return((*sipAccount)(nil), errors.New("Error"))
 	db := openDBConnection(t)
 	defer db.Close()
-	w := makeRequest(t, api, db, http.MethodPost, "/register", "", data)
+	w := makeRequest(t, api, nil, db, http.MethodPost, "/register", "", data)
 	assert.Equal(t, http.StatusBadGateway, w.Code)
 	user := &User{}
 	assert.True(t, db.First(user, "user_name = ?", "user1").RecordNotFound())
@@ -167,7 +167,7 @@ func TestRouteLogin(t *testing.T) {
 	user.SetPassword("123456")
 	assert.NoError(t, db.Create(user).Error)
 	result := map[string]string{}
-	w := makeRequest(t, nil, db, http.MethodPost, "/login", "", data, &result)
+	w := makeRequest(t, nil, nil, db, http.MethodPost, "/login", "", data, &result)
 	assert.Equal(t, http.StatusOK, w.Code)
 	assert.NotEmpty(t, result["token"])
 	assert.NotEmpty(t, result["expire"])
@@ -183,7 +183,7 @@ func TestRouteLoginFailWithWrongPassword(t *testing.T) {
 	user := &User{UserName: "user1", AreaCode: "999"}
 	user.SetPassword("123456")
 	assert.NoError(t, db.Create(user).Error)
-	w := makeRequest(t, nil, db, http.MethodPost, "/login", "", data)
+	w := makeRequest(t, nil, nil, db, http.MethodPost, "/login", "", data)
 	assert.Equal(t, http.StatusUnauthorized, w.Code)
 }
 
@@ -197,7 +197,7 @@ func TestRouteLoginFailWithWrongUserName(t *testing.T) {
 	user := &User{UserName: "user1", AreaCode: "999"}
 	user.SetPassword("123456")
 	assert.NoError(t, db.Create(user).Error)
-	w := makeRequest(t, nil, db, http.MethodPost, "/login", "", data)
+	w := makeRequest(t, nil, nil, db, http.MethodPost, "/login", "", data)
 	assert.Equal(t, http.StatusUnauthorized, w.Code)
 }
 
@@ -206,7 +206,7 @@ func TestRouteRefreshToken(t *testing.T) {
 	defer db.Close()
 	token := createUserAndLogin(t, db)
 	result := map[string]string{}
-	w := makeRequest(t, nil, db, http.MethodGet, "/refreshToken", token, nil, &result)
+	w := makeRequest(t, nil, nil, db, http.MethodGet, "/refreshToken", token, nil, &result)
 	assert.Equal(t, http.StatusOK, w.Code)
 	assert.NotEmpty(t, result["token"])
 	assert.NotEmpty(t, result["expire"])
@@ -222,7 +222,7 @@ func TestRouteSIPData(t *testing.T) {
 	}, nil)
 	token := createUserAndLogin(t, db)
 	result := map[string]string{}
-	w := makeRequest(t, api, db, http.MethodGet, "/sipData", token, nil, &result)
+	w := makeRequest(t, api, nil, db, http.MethodGet, "/sipData", token, nil, &result)
 	assert.Equal(t, http.StatusOK, w.Code)
 	api.AssertExpectations(t)
 	assert.Equal(t, "test@test.net", result["sipUri"])
@@ -236,7 +236,7 @@ func TestRouteSIPDataFail(t *testing.T) {
 	defer db.Close()
 	api.On("CreateSIPAuthToken", "789").Return((*bandwidth.DomainEndpointToken)(nil), errors.New("Error"))
 	token := createUserAndLogin(t, db)
-	w := makeRequest(t, api, db, http.MethodGet, "/sipData", token)
+	w := makeRequest(t, api, nil, db, http.MethodGet, "/sipData", token)
 	assert.Equal(t, http.StatusBadGateway, w.Code)
 	api.AssertExpectations(t)
 }
@@ -245,12 +245,12 @@ func TestRouteSIPDataFailUnauthorized(t *testing.T) {
 	api := &fakeCatapultAPI{}
 	db := openDBConnection(t)
 	defer db.Close()
-	w := makeRequest(t, api, db, http.MethodGet, "/sipData", "")
+	w := makeRequest(t, api, nil, db, http.MethodGet, "/sipData", "")
 	assert.Equal(t, http.StatusUnauthorized, w.Code)
 }
 
 func TestRouteIndex(t *testing.T) {
-	w := makeRequest(t, nil, nil, http.MethodGet, "/", "")
+	w := makeRequest(t, nil, nil, nil, http.MethodGet, "/", "")
 	assert.Equal(t, http.StatusOK, w.Code)
 }
 
@@ -271,7 +271,7 @@ func TestRouteCallCallbackOutgoingCall(t *testing.T) {
 		TransferTo:       "+1472583690",
 		TransferCallerID: "+1234567891",
 	}).Return("", nil)
-	w := makeRequest(t, api, db, http.MethodPost, "/callCallback", "", &CallbackForm{
+	w := makeRequest(t, api, nil, db, http.MethodPost, "/callCallback", "", &CallbackForm{
 		CallID:    "callID",
 		EventType: "answer",
 		From:      "sip:otest@test.com",
@@ -299,7 +299,7 @@ func TestRouteCallCallbackIncomingCall(t *testing.T) {
 		TransferCallerID: "+1472583688",
 		CallbackURL:      "http:///transferCallback",
 	}).Return("", nil)
-	w := makeRequest(t, api, db, http.MethodPost, "/callCallback", "", &CallbackForm{
+	w := makeRequest(t, api, nil, db, http.MethodPost, "/callCallback", "", &CallbackForm{
 		CallID:    "callID",
 		EventType: "answer",
 		From:      "+1472583688",
@@ -335,7 +335,7 @@ func TestRouteCallCallbackIncomingCallSipToSip(t *testing.T) {
 		TransferCallerID: "+1234567802",
 		CallbackURL:      "http:///transferCallback",
 	}).Return("", nil)
-	w := makeRequest(t, api, db, http.MethodPost, "/callCallback", "", &CallbackForm{
+	w := makeRequest(t, api, nil, db, http.MethodPost, "/callCallback", "", &CallbackForm{
 		CallID:    "callID",
 		EventType: "answer",
 		From:      "sip:i2test@test.com",
@@ -349,7 +349,7 @@ func TestRouteCallCallbackWithUnknownNumber(t *testing.T) {
 	api := &fakeCatapultAPI{}
 	db := openDBConnection(t)
 	defer db.Close()
-	w := makeRequest(t, api, db, http.MethodPost, "/callCallback", "", &CallbackForm{
+	w := makeRequest(t, api, nil, db, http.MethodPost, "/callCallback", "", &CallbackForm{
 		CallID:    "newCallID",
 		EventType: "answer",
 		From:      "+1472583688",
@@ -359,13 +359,17 @@ func TestRouteCallCallbackWithUnknownNumber(t *testing.T) {
 	api.AssertNotCalled(t, "UpdateCall")
 }
 
-func makeRequest(t *testing.T, api catapultAPIInterface, db *gorm.DB, method, path, authToken string, body ...interface{}) *httptest.ResponseRecorder {
+func makeRequest(t *testing.T, api catapultAPIInterface, timerAPI timerInterface, db *gorm.DB, method, path, authToken string, body ...interface{}) *httptest.ResponseRecorder {
 	os.Setenv("CATAPULT_USER_ID", "userID")
 	os.Setenv("CATAPULT_API_TOKEN", "token")
 	os.Setenv("CATAPULT_API_SECRET", "secret")
 	router := gin.New()
+	if timerAPI == nil {
+		timerAPI = &timer{}
+	}
 	router.Use(func(c *gin.Context) {
 		c.Set("catapultAPI", api)
+		c.Set("timerAPI", timerAPI)
 		c.Next()
 	})
 	require.NoError(t, getRoutes(router, db))
@@ -405,7 +409,7 @@ func createUserAndLogin(t *testing.T, db *gorm.DB) string {
 	user.SetPassword("123456")
 	assert.NoError(t, db.Create(user).Error)
 	result := map[string]string{}
-	w := makeRequest(t, nil, db, http.MethodPost, "/login", "", data, &result)
+	w := makeRequest(t, nil, nil, db, http.MethodPost, "/login", "", data, &result)
 	assert.Equal(t, http.StatusOK, w.Code)
 	return result["token"]
 }

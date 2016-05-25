@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"testing"
+	"time"
 
 	"github.com/bandwidthcom/go-bandwidth"
 	"github.com/gin-gonic/gin"
@@ -182,4 +183,12 @@ func (m *fakeCatapultAPI) CreateCall(data *bandwidth.CreateCallData) (string, er
 func (m *fakeCatapultAPI) DownloadMediaFile(name string) (io.ReadCloser, string, error) {
 	args := m.Called(name)
 	return args.Get(0).(io.ReadCloser), args.String(1), args.Error(2)
+}
+
+type fakeTimerAPI struct {
+	mock.Mock
+}
+
+func (m *fakeTimerAPI) Sleep(d time.Duration) {
+	m.Called(d)
 }

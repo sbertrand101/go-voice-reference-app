@@ -152,6 +152,7 @@ func getRoutes(router *gin.Engine, db *gorm.DB) error {
 	router.POST("/callCallback", func(c *gin.Context) {
 		form := &CallbackForm{}
 		api := c.MustGet("catapultAPI").(catapultAPIInterface)
+		timerAPI := c.MustGet("timerAPI").(timerInterface)
 		err := c.Bind(form)
 		debugf("Catapult Event: %+v\n", *form)
 		if err != nil {
@@ -178,7 +179,7 @@ func getRoutes(router *gin.Engine, db *gorm.DB) error {
 					})
 					go func() {
 						debugf("Waiting for answer call")
-						time.Sleep(15 * time.Second)
+						timerAPI.Sleep(15 * time.Second)
 						call, _ := api.GetCall(transferedCallID)
 						if call.State == "started" {
 							// move to voice mail
