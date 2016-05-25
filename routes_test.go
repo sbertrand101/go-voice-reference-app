@@ -360,7 +360,6 @@ func TestRouteCallCallbackWithUnknownNumber(t *testing.T) {
 }
 
 func makeRequest(t *testing.T, api catapultAPIInterface, db *gorm.DB, method, path, authToken string, body ...interface{}) *httptest.ResponseRecorder {
-	gin.SetMode(gin.TestMode)
 	os.Setenv("CATAPULT_USER_ID", "userID")
 	os.Setenv("CATAPULT_API_TOKEN", "token")
 	os.Setenv("CATAPULT_API_SECRET", "secret")

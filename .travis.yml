@@ -10,8 +10,8 @@ before_install:
   - export PATH=$HOME/gopath/bin:$PATH
 
 script:
-  - ENV_GIN_MODE=test go test -race ./...
-  - ENV_GIN_MODE=test go test -cover ./...
+  - ENV_GIN_MODE=test go test -race
+  - ENV_GIN_MODE=test go test -cover
 
 matrix:
     allow_failures:
