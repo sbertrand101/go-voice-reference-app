@@ -377,6 +377,143 @@ func TestUpdateCallFail(t *testing.T) {
 	assert.Error(t, err)
 }
 
+func TestGetCall(t *testing.T) {
+	server, api := startMockCatapultServer(t, []RequestHandler{
+		RequestHandler{
+			PathAndQuery:  "/v1/users/userID/calls/123",
+			Method:        http.MethodGet,
+			ContentToSend: `{"id": "123", "state":"transfering"}`,
+		},
+	})
+	defer server.Close()
+	call, _ := api.GetCall("123")
+	assert.Equal(t, "123", call.ID)
+}
+
+func TestGetCallFail(t *testing.T) {
+	server, api := startMockCatapultServer(t, []RequestHandler{
+		RequestHandler{
+			PathAndQuery:     "/v1/users/userID/calls/123",
+			Method:           http.MethodGet,
+			StatusCodeToSend: http.StatusBadRequest,
+		},
+	})
+	defer server.Close()
+	_, err := api.GetCall("123")
+	assert.Error(t, err)
+}
+
+func TestPlayAudioToCall(t *testing.T) {
+	server, api := startMockCatapultServer(t, []RequestHandler{
+		RequestHandler{
+			PathAndQuery:     "/v1/users/userID/calls/123/audio",
+			Method:           http.MethodPost,
+			EstimatedContent: `{"fileUrl":"url"}`,
+		},
+	})
+	defer server.Close()
+	err := api.PlayAudioToCall("123", "url")
+	assert.NoError(t, err)
+}
+
+func TestSpeakPlayAudioFail(t *testing.T) {
+	server, api := startMockCatapultServer(t, []RequestHandler{
+		RequestHandler{
+			PathAndQuery:     "/v1/users/userID/calls/123/audio",
+			Method:           http.MethodPost,
+			StatusCodeToSend: http.StatusBadRequest,
+		},
+	})
+	defer server.Close()
+	err := api.PlayAudioToCall("123", "url")
+	assert.Error(t, err)
+}
+
+func TestSpeakSentenceToCall(t *testing.T) {
+	server, api := startMockCatapultServer(t, []RequestHandler{
+		RequestHandler{
+			PathAndQuery:     "/v1/users/userID/calls/123/audio",
+			Method:           http.MethodPost,
+			EstimatedContent: `{"sentence":"text","gender":"female","locale":"en_US","voice":"julie"}`,
+		},
+	})
+	defer server.Close()
+	err := api.SpeakSentenceToCall("123", "text")
+	assert.NoError(t, err)
+}
+
+func TestSpeakSentenceToCallFail(t *testing.T) {
+	server, api := startMockCatapultServer(t, []RequestHandler{
+		RequestHandler{
+			PathAndQuery:     "/v1/users/userID/calls/123/audio",
+			Method:           http.MethodPost,
+			StatusCodeToSend: http.StatusBadRequest,
+		},
+	})
+	defer server.Close()
+	err := api.SpeakSentenceToCall("123", "test")
+	assert.Error(t, err)
+}
+
+func TestCreateGather(t *testing.T) {
+	server, api := startMockCatapultServer(t, []RequestHandler{
+		RequestHandler{
+			PathAndQuery:     "/v1/users/userID/calls/123/gather",
+			Method:           http.MethodPost,
+			EstimatedContent: `{"maxDigits":"1"}`,
+			HeadersToSend:    map[string]string{"Location": "/v1/users/userID/calls/123/gather/456"},
+		},
+	})
+	defer server.Close()
+	id, err := api.CreateGather("123", &bandwidth.CreateGatherData{
+		MaxDigits: 1,
+	})
+	assert.NoError(t, err)
+	assert.Equal(t, "456", id)
+}
+
+func TestCreateGatherFail(t *testing.T) {
+	server, api := startMockCatapultServer(t, []RequestHandler{
+		RequestHandler{
+			PathAndQuery:     "/v1/users/userID/calls/123/gather",
+			Method:           http.MethodPost,
+			StatusCodeToSend: http.StatusBadRequest,
+		},
+	})
+	defer server.Close()
+	_, err := api.CreateGather("123", &bandwidth.CreateGatherData{
+		MaxDigits: 1,
+	})
+	assert.Error(t, err)
+}
+
+func TestGetRecording(t *testing.T) {
+	server, api := startMockCatapultServer(t, []RequestHandler{
+		RequestHandler{
+			PathAndQuery:  "/v1/users/userID/recordings/456",
+			Method:        http.MethodGet,
+			ContentToSend: `{"id": "456"}`,
+		},
+	})
+	defer server.Close()
+	r, err := api.GetRecording("456")
+	assert.NoError(t, err)
+	assert.Equal(t, "456", r.ID)
+}
+
+func TestGetRecordingFail(t *testing.T) {
+	server, api := startMockCatapultServer(t, []RequestHandler{
+		RequestHandler{
+			PathAndQuery:     "/v1/users/userID/recordings/456",
+			Method:           http.MethodGet,
+			StatusCodeToSend: http.StatusBadRequest,
+		},
+	})
+	defer server.Close()
+	_, err := api.GetRecording("456")
+	assert.Error(t, err)
+}
+
 func TestCatapultMiddleware(t *testing.T) {
 	os.Setenv("CATAPULT_USER_ID", "UserID")
 	os.Setenv("CATAPULT_API_TOKEN", "Token")
