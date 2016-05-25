@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"io"
 	"strconv"
 	"time"
 
@@ -38,7 +39,15 @@ type CallbackForm struct {
 
 const beepURL = "https://s3.amazonaws.com/bwdemos/beep.mp3"
 
+type newVoiceMailChannelData struct {
+	UserID  uint
+	Channel chan *VoiceMailMessage
+}
+
 func getRoutes(router *gin.Engine, db *gorm.DB) error {
+	addNewVoiceMessageChannel := make(chan *newVoiceMailChannelData, 0)
+	removeNewVoiceMessageChannel := make(chan *newVoiceMailChannelData, 0)
+	newVoiceMailChannels := map[uint][]chan *VoiceMailMessage{}
 
 	authMiddleware := &jwt.GinJWTMiddleware{
 		Realm:      "Bandwidth",
@@ -206,7 +215,7 @@ func getRoutes(router *gin.Engine, db *gorm.DB) error {
 		}
 		debugf("Catapult Event for transfered call: %+v\n", *form)
 		if form.Tag != "" {
-			handleVoiceMailEvent(form, db, api)
+			handleVoiceMailEvent(form, db, api, newVoiceMailChannels)
 		}
 		c.String(http.StatusOK, "")
 	})
@@ -308,12 +317,74 @@ func getRoutes(router *gin.Engine, db *gorm.DB) error {
 		c.String(http.StatusOK, "")
 	})
 
-	router.StaticFile("/", "./public/index.html")
+	router.GET("/voiceMessages", authMiddleware.MiddlewareFunc(), func(c *gin.Context) {
+		user := c.MustGet("user").(*User)
+		list := []VoiceMailMessage{}
+		err := db.Order("start_time", false).Model(user).Related(&list).Error
+		if err != nil {
+			setError(c, http.StatusBadGateway, err, "Error on getting voice messages")
+			return
+		}
+		c.JSON(http.StatusOK, list)
+	})
 
+	router.DELETE("/voiceMessages/:id", authMiddleware.MiddlewareFunc(), func(c *gin.Context) {
+		user := c.MustGet("user").(*User)
+		err := db.Where("user_id = ? and id = ?", user.ID, c.Param("id")).Delete(VoiceMailMessage{}).Error
+		if err != nil {
+			setError(c, http.StatusBadGateway, err, "Error on removing a voice message")
+			return
+		}
+		c.Status(http.StatusOK)
+	})
+
+	router.GET("/voiceMessagesStream", authMiddleware.MiddlewareFunc(), func(c *gin.Context) {
+		user := c.MustGet("user").(*User)
+		channel := make(chan *VoiceMailMessage)
+		data := &newVoiceMailChannelData{UserID: user.ID, Channel: channel}
+		addNewVoiceMessageChannel <- data // subscribe to new voice messages for current user
+		defer func() {
+			removeNewVoiceMessageChannel <- data // remove subscription
+			close(channel)
+		}()
+		c.Stream(func(w io.Writer) bool {
+			c.SSEvent("message", <-channel)
+			return true
+		})
+	})
+
+	router.StaticFile("/", "./public/index.html")
+	go func() {
+		// Thread-safe handling of subscribing/unsubscribing to new voice messages
+		for {
+			select {
+			case data := <-addNewVoiceMessageChannel:
+				list := newVoiceMailChannels[data.UserID]
+				if list == nil {
+					list = []chan *VoiceMailMessage{}
+				}
+				newVoiceMailChannels[data.UserID] = append(list, data.Channel)
+
+			case data := <-removeNewVoiceMessageChannel:
+				list := newVoiceMailChannels[data.UserID]
+				if list == nil {
+					return
+				}
+				for index, channel := range list {
+					if channel == data.Channel {
+						l := len(list)
+						list[index] = list[l-1]
+						newVoiceMailChannels[data.UserID] = list[:l-1]
+						break
+					}
+				}
+			}
+		}
+	}()
 	return nil
 }
 
-func handleVoiceMailEvent(form *CallbackForm, db *gorm.DB, api catapultAPIInterface) {
+func handleVoiceMailEvent(form *CallbackForm, db *gorm.DB, api catapultAPIInterface, newVoiceMailChannels map[uint][]chan *VoiceMailMessage) {
 	debugf("Handle voice mail event")
 	user, err := getUserForCall(form, db)
 	if err != nil {
@@ -330,12 +401,26 @@ func handleVoiceMailEvent(form *CallbackForm, db *gorm.DB, api catapultAPIInterf
 		if form.State == "complete" {
 			debugf("Recording %s has been completed.", form.RecordingID)
 			recording, _ := api.GetRecording(form.RecordingID)
-			db.Create(&VoiceMailMessage{
+			message := &VoiceMailMessage{
 				MediaURL:  recording.Media,
 				StartTime: parseTime(recording.StartTime),
 				EndTime:   parseTime(recording.EndTime),
 				UserID:    user.ID,
-			})
+			}
+			err := db.Create(message).Error
+			if err != nil {
+				debugf("Error on on saving voice mail message: %s", err.Error())
+				return
+			}
+
+			// send notification about new voice mail message
+			list := newVoiceMailChannels[user.ID]
+			if list == nil {
+				break
+			}
+			for _, channel := range list {
+				channel <- message
+			}
 		}
 	}
 }

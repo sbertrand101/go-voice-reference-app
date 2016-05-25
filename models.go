@@ -30,11 +30,11 @@ type User struct {
 // VoiceMailMessage model
 type VoiceMailMessage struct {
 	gorm.Model
-	User      User `gorm:"ForeignKey:UserID"`
-	UserID    uint
-	StartTime time.Time `gorm:"index"`
-	EndTime   time.Time
-	MediaURL  string `gorm:"column:media_url;type:varchar(1024)"`
+	User      User      `gorm:"ForeignKey:UserID",json:"-"`
+	UserID    uint      `json:"-"`
+	StartTime time.Time `gorm:"index",json:"startTime"`
+	EndTime   time.Time `json:"endTime"`
+	MediaURL  string    `gorm:"column:media_url;type:varchar(1024)",json:"mediaUrl"`
 }
 
 // SetPassword sets hash for password
