@@ -34,6 +34,7 @@ type catapultAPIInterface interface {
 	SpeakSentenceToCall(callID string, text string) error
 	CreateGather(callID string, data *bandwidth.CreateGatherData) (string, error)
 	GetRecording(recordingID string) (*bandwidth.Recording, error)
+	CreateCall(data *bandwidth.CreateCallData) (string, error)
 }
 
 func newCatapultAPI(context *gin.Context) (*catapultAPI, error) {
@@ -183,6 +184,10 @@ func (api *catapultAPI) CreateGather(callID string, data *bandwidth.CreateGather
 
 func (api *catapultAPI) GetRecording(recordingID string) (*bandwidth.Recording, error) {
 	return api.client.GetRecording(recordingID)
+}
+
+func (api *catapultAPI) CreateCall(data *bandwidth.CreateCallData) (string, error) {
+	return api.client.CreateCall(data)
 }
 
 func catapultMiddleware(c *gin.Context) {

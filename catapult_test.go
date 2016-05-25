@@ -514,6 +514,40 @@ func TestGetRecordingFail(t *testing.T) {
 	assert.Error(t, err)
 }
 
+func TestCreateCall(t *testing.T) {
+	server, api := startMockCatapultServer(t, []RequestHandler{
+		RequestHandler{
+			PathAndQuery:     "/v1/users/userID/calls",
+			Method:           http.MethodPost,
+			EstimatedContent: `{"from":"111","to":"222"}`,
+			HeadersToSend:    map[string]string{"Location": "/v1/users/userID/calls/123"},
+		},
+	})
+	defer server.Close()
+	id, err := api.CreateCall(&bandwidth.CreateCallData{
+		From: "111",
+		To:   "222",
+	})
+	assert.NoError(t, err)
+	assert.Equal(t, "123", id)
+}
+
+func TestCreateCallFail(t *testing.T) {
+	server, api := startMockCatapultServer(t, []RequestHandler{
+		RequestHandler{
+			PathAndQuery:     "/v1/users/userID/calls",
+			Method:           http.MethodPost,
+			StatusCodeToSend: http.StatusBadRequest,
+		},
+	})
+	defer server.Close()
+	_, err := api.CreateCall(&bandwidth.CreateCallData{
+		From: "111",
+		To:   "222",
+	})
+	assert.Error(t, err)
+}
+
 func TestCatapultMiddleware(t *testing.T) {
 	os.Setenv("CATAPULT_USER_ID", "UserID")
 	os.Setenv("CATAPULT_API_TOKEN", "Token")

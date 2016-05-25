@@ -23,7 +23,7 @@ type User struct {
 	EndpointID        string `gorm:"column:endpoint_id;type:varchar(64)"`
 	SIPURI            string `gorm:"column:sip_uri;type:varchar(1024);index"`
 	SIPPassword       string `gorm:"column:sip_password;type:varchar(128)"`
-	GreatingURL       string `gorm:"column:greating_url;type:varchar(1024)"`
+	GreetingURL       string `gorm:"column:greeting_url;type:varchar(1024)"`
 	VoiceMailMessages []VoiceMailMessage
 }
 

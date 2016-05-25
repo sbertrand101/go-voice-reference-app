@@ -173,3 +173,8 @@ func (m *fakeCatapultAPI) GetRecording(recordingID string) (*bandwidth.Recording
 	args := m.Called(recordingID)
 	return args.Get(0).(*bandwidth.Recording), args.Error(1)
 }
+
+func (m *fakeCatapultAPI) CreateCall(data *bandwidth.CreateCallData) (string, error) {
+	args := m.Called(data)
+	return args.String(0), args.Error(1)
+}
