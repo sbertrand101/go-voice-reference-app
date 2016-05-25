@@ -325,7 +325,11 @@ func getRoutes(router *gin.Engine, db *gorm.DB) error {
 			setError(c, http.StatusBadGateway, err, "Error on getting voice messages")
 			return
 		}
-		c.JSON(http.StatusOK, list)
+		result := make([]interface{}, len(list))
+		for i, m := range list {
+			result[i] = m.ToJSONObject()
+		}
+		c.JSON(http.StatusOK, result)
 	})
 
 	router.GET("/voiceMessages/:id/media", authMiddleware.MiddlewareFunc(), func(c *gin.Context) {
@@ -372,7 +376,8 @@ func getRoutes(router *gin.Engine, db *gorm.DB) error {
 			close(channel)
 		}()
 		c.Stream(func(w io.Writer) bool {
-			c.SSEvent("message", <-channel)
+			message := <-channel
+			c.SSEvent("message", message.ToJSONObject())
 			return true
 		})
 	})

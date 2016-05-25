@@ -30,11 +30,11 @@ type User struct {
 // VoiceMailMessage model
 type VoiceMailMessage struct {
 	gorm.Model
-	User      User      `gorm:"ForeignKey:UserID",json:"-"`
-	UserID    uint      `json:"-"`
-	StartTime time.Time `gorm:"index",json:"startTime"`
-	EndTime   time.Time `json:"endTime"`
-	MediaURL  string    `gorm:"column:media_url;type:varchar(1024)",json:"mediaUrl"`
+	User      User `gorm:"ForeignKey:UserID"`
+	UserID    uint
+	StartTime time.Time `gorm:"index"`
+	EndTime   time.Time
+	MediaURL  string `gorm:"column:media_url;type:varchar(1024)"`
 }
 
 // SetPassword sets hash for password
@@ -50,6 +50,15 @@ func (u *User) SetPassword(password string) error {
 // ComparePasswords compares hashed password with parameter
 func (u *User) ComparePasswords(password string) bool {
 	return bcrypt.CompareHashAndPassword(u.PasswordHash, []byte(password+salt)) == nil
+}
+
+// ToJSONObject returns map presentation of model instance (usefull for json)
+func (m *VoiceMailMessage) ToJSONObject() map[string]interface{} {
+	return map[string]interface{}{
+		"startTime": m.StartTime,
+		"endTime":   m.EndTime,
+		"id":        m.ID,
+	}
 }
 
 // AutoMigrate updates tables in db using models definitions
