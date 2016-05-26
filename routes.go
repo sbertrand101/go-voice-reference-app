@@ -44,10 +44,15 @@ type newVoiceMailChannelData struct {
 	Channel chan *VoiceMailMessage
 }
 
+var newVoiceMailChannels map[uint][]chan *VoiceMailMessage
+
+func init() {
+	newVoiceMailChannels = map[uint][]chan *VoiceMailMessage{}
+}
+
 func getRoutes(router *gin.Engine, db *gorm.DB) error {
 	addNewVoiceMessageChannel := make(chan *newVoiceMailChannelData, 0)
 	removeNewVoiceMessageChannel := make(chan *newVoiceMailChannelData, 0)
-	newVoiceMailChannels := map[uint][]chan *VoiceMailMessage{}
 
 	authMiddleware := &jwt.GinJWTMiddleware{
 		Realm:      "Bandwidth",
@@ -178,7 +183,7 @@ func getRoutes(router *gin.Engine, db *gorm.DB) error {
 						CallbackURL:      fmt.Sprintf("http://%s/transferCallback", c.Request.Host), // to handle redirection to voice mail
 					})
 					go func() {
-						debugf("Waiting for answer call")
+						debugf("Waiting for answer call %s", transferedCallID)
 						timerAPI.Sleep(15 * time.Second)
 						call, _ := api.GetCall(transferedCallID)
 						if call.State == "started" {
@@ -241,6 +246,14 @@ func getRoutes(router *gin.Engine, db *gorm.DB) error {
 			return
 		}
 		debugf("Catapult Event for greeting record: %+v\n", *form)
+		if form.EventType == "gather" && form.State == "completed" && form.Tag == "Record" {
+			debugf("Stoping recording of call %s\n", form.CallID)
+			api.UpdateCall(form.CallID, &bandwidth.UpdateCallData{
+				RecordingEnabled: false,
+			})
+			c.String(http.StatusOK, "")
+			return
+		}
 		user, err := getUserForCall(form, db)
 		if err != nil {
 			debugf("Error on getting user: %s", err.Error())
@@ -250,7 +263,6 @@ func getRoutes(router *gin.Engine, db *gorm.DB) error {
 			api.CreateGather(form.CallID, &bandwidth.CreateGatherData{
 				MaxDigits:         1,
 				InterDigitTimeout: 60,
-				Tag:               "GreetingMenu",
 				Prompt: &bandwidth.GatherPromptData{
 					Gender:   "female",
 					Voice:    "julie",
@@ -264,31 +276,29 @@ func getRoutes(router *gin.Engine, db *gorm.DB) error {
 		case "gather":
 			{
 				if form.State == "completed" {
-					switch form.Tag {
-					case "GreetingMenu":
-						switch form.Digits {
-						case "1":
-							playGreeting(form.CallID, user, api)
-							mainMenu()
-						case "2":
-							api.SpeakSentenceToCall(form.CallID, "Say your greeting after beep. Press any key to complete recording.")
-							api.CreateGather(form.CallID, &bandwidth.CreateGatherData{
-								MaxDigits:         1,
-								InterDigitTimeout: 60,
-								Tag:               "Record",
-								Prompt:            &bandwidth.GatherPromptData{FileURL: beepURL},
-							})
-						case "3":
-							user.GreetingURL = ""
-							err := db.Save(user).Error
-							if err != nil {
-								debugf("Error on saving user's data %s", err.Error())
-								break
-							}
-							api.SpeakSentenceToCall(form.CallID, "Your greeting has been set to default.")
-							mainMenu()
+					switch form.Digits {
+					case "1":
+						playGreeting(form.CallID, user, api)
+						mainMenu()
+					case "2":
+						api.SpeakSentenceToCall(form.CallID, "Say your greeting after beep. Press any key to complete recording.")
+						api.CreateGather(form.CallID, &bandwidth.CreateGatherData{
+							MaxDigits:         1,
+							InterDigitTimeout: 60,
+							Prompt:            &bandwidth.GatherPromptData{FileURL: beepURL},
+							Tag:               "Record",
+						})
+					case "3":
+						user.GreetingURL = ""
+						err := db.Save(user).Error
+						if err != nil {
+							debugf("Error on saving user's data %s", err.Error())
+							break
 						}
+						api.SpeakSentenceToCall(form.CallID, "Your greeting has been set to default.")
+						mainMenu()
 					}
+
 				}
 			}
 		case "recording":
@@ -321,7 +331,7 @@ func getRoutes(router *gin.Engine, db *gorm.DB) error {
 	router.GET("/voiceMessages", authMiddleware.MiddlewareFunc(), func(c *gin.Context) {
 		user := c.MustGet("user").(*User)
 		list := []VoiceMailMessage{}
-		err := db.Order("start_time", false).Model(user).Related(&list).Error
+		err := db.Order("start_time desc").Model(user).Related(&list).Error
 		if err != nil {
 			setError(c, http.StatusBadGateway, err, "Error on getting voice messages")
 			return
@@ -350,11 +360,8 @@ func getRoutes(router *gin.Engine, db *gorm.DB) error {
 		}
 		defer reader.Close()
 		c.Header("Content-Type", contentType)
-		c.Stream(func(w io.Writer) bool {
-			length, _ := io.Copy(w, reader)
-			c.Header("Content-Length", strconv.FormatInt(length, 10))
-			return false
-		})
+		length, _ := io.Copy(c.Writer, reader)
+		c.Header("Content-Length", strconv.FormatInt(length, 10))
 	})
 
 	router.DELETE("/voiceMessages/:id", authMiddleware.MiddlewareFunc(), func(c *gin.Context) {
@@ -378,7 +385,9 @@ func getRoutes(router *gin.Engine, db *gorm.DB) error {
 		}()
 		c.Stream(func(w io.Writer) bool {
 			message := <-channel
-			c.SSEvent("message", message.ToJSONObject())
+			json := message.ToJSONObject()
+			debugf("Received new message %+v\n", json)
+			c.SSEvent("message", json)
 			return true
 		})
 	})
@@ -415,10 +424,10 @@ func getRoutes(router *gin.Engine, db *gorm.DB) error {
 }
 
 func handleVoiceMailEvent(form *CallbackForm, db *gorm.DB, api catapultAPIInterface, newVoiceMailChannels map[uint][]chan *VoiceMailMessage) {
-	debugf("Handle voice mail event")
+	debugf("Handle voice mail event\n")
 	user, err := getUserForCall(form, db)
 	if err != nil {
-		debugf("Error on getting user: %s", err.Error())
+		debugf("Error on getting user: %s\n", err.Error())
 		return
 	}
 	switch form.EventType {
@@ -429,7 +438,7 @@ func handleVoiceMailEvent(form *CallbackForm, db *gorm.DB, api catapultAPIInterf
 		break
 	case "recording":
 		if form.State == "complete" {
-			debugf("Recording %s has been completed.", form.RecordingID)
+			debugf("Recording %s has been completed.\n", form.RecordingID)
 			recording, _ := api.GetRecording(form.RecordingID)
 			message := &VoiceMailMessage{
 				MediaURL:  recording.Media,
@@ -439,7 +448,7 @@ func handleVoiceMailEvent(form *CallbackForm, db *gorm.DB, api catapultAPIInterf
 			}
 			err := db.Create(message).Error
 			if err != nil {
-				debugf("Error on on saving voice mail message: %s", err.Error())
+				debugf("Error on on saving voice mail message: %s\n", err.Error())
 				return
 			}
 
@@ -492,7 +501,7 @@ func setError(c *gin.Context, code int, err error, message ...string) {
 }
 
 func parseTime(isoTime string) time.Time {
-	time, _ := time.Parse("RFC3339", isoTime)
+	time, _ := time.Parse(time.RFC3339Nano, isoTime)
 	return time
 }
 
