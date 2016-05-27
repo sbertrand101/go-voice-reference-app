@@ -34,7 +34,7 @@ func main() {
 	if err = AutoMigrate(db).Error; err != nil {
 		panic(fmt.Sprintf("Error on executing db migrations: %s", err.Error()))
 	}
-	if err = getRoutes(router, db); err != nil {
+	if err = getRoutes(router, db, nil); err != nil {
 		panic(fmt.Sprintf("Error on creating routes: %s", err.Error()))
 	}
 	router.Run()

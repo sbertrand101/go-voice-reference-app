@@ -20,6 +20,7 @@ import (
 	"github.com/jinzhu/gorm"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/tuxychandru/pubsub"
 )
 
 func TestRouteRegister(t *testing.T) {
@@ -283,6 +284,7 @@ func TestRouteCallCallbackOutgoingCall(t *testing.T) {
 	})
 	assert.Equal(t, http.StatusOK, w.Code)
 	api.AssertExpectations(t)
+	api.On("GetCall", "").Return(&bandwidth.Call{}, nil)
 }
 
 func TestRouteCallCallbackIncomingCall(t *testing.T) {
@@ -311,6 +313,7 @@ func TestRouteCallCallbackIncomingCall(t *testing.T) {
 	})
 	assert.Equal(t, http.StatusOK, w.Code)
 	api.AssertExpectations(t)
+	api.On("GetCall", "").Return(&bandwidth.Call{}, nil)
 }
 
 func TestRouteCallCallbackIncomingCallSipToSip(t *testing.T) {
@@ -347,6 +350,7 @@ func TestRouteCallCallbackIncomingCallSipToSip(t *testing.T) {
 	})
 	assert.Equal(t, http.StatusOK, w.Code)
 	api.AssertExpectations(t)
+	api.On("GetCall", "").Return(&bandwidth.Call{}, nil)
 }
 
 func TestRouteCallCallbackWithUnknownNumber(t *testing.T) {
@@ -361,6 +365,7 @@ func TestRouteCallCallbackWithUnknownNumber(t *testing.T) {
 	})
 	assert.Equal(t, http.StatusOK, w.Code)
 	api.AssertNotCalled(t, "UpdateCall")
+	api.On("GetCall", "").Return(&bandwidth.Call{}, nil)
 }
 
 func TestRouteCallCallbackIncomingCallRedirectToVoiceMail(t *testing.T) {
@@ -400,6 +405,7 @@ func TestRouteCallCallbackIncomingCallRedirectToVoiceMail(t *testing.T) {
 	time.Sleep(5 * time.Millisecond)
 	timerAPI.AssertExpectations(t)
 	api.AssertExpectations(t)
+	api.On("GetCall", "").Return(&bandwidth.Call{}, nil)
 }
 
 func TestRouteCallCallbackIncomingCallDoNothingForAnsweredAndCompletedCalls(t *testing.T) {
@@ -435,6 +441,7 @@ func TestRouteCallCallbackIncomingCallDoNothingForAnsweredAndCompletedCalls(t *t
 	time.Sleep(5 * time.Millisecond)
 	timerAPI.AssertExpectations(t)
 	api.AssertExpectations(t)
+	api.On("GetCall", "").Return(&bandwidth.Call{}, nil)
 }
 
 func TestRouteTransferCallbackDoNothingForMissingTag(t *testing.T) {
@@ -993,23 +1000,21 @@ func TestRouteGetVoiceMessageStream(t *testing.T) {
 		UserID:    user.ID,
 	}
 	db.Create(message)
-
+	closer = make(chan bool, 1)
+	newVoiceMailMessage = pubsub.New(1)
 	go func() {
 		makeRequest(t, api, nil, db, http.MethodGet, "/voiceMessagesStream", token)
 	}()
 	time.Sleep(10 * time.Millisecond)
-	assert.Equal(t, 1, len(newVoiceMailChannels[user.ID]))
-	newVoiceMailChannels[user.ID][0] <- message
+	newVoiceMailMessage.Pub(message, strconv.FormatUint(uint64(user.ID), 10))
+	time.Sleep(50 * time.Millisecond)
 	closer <- true
-	time.Sleep(100 * time.Millisecond)
-	assert.Equal(t, 0, len(newVoiceMailChannels[user.ID]))
+	time.Sleep(20 * time.Millisecond)
+	close(closer)
 }
 
 var closer chan bool
-
-func init() {
-	closer = make(chan bool)
-}
+var newVoiceMailMessage *pubsub.PubSub
 
 func makeRequest(t *testing.T, api catapultAPIInterface, timerAPI timerInterface, db *gorm.DB, method, path, authToken string, body ...interface{}) *responseRecorder {
 	os.Setenv("CATAPULT_USER_ID", "userID")
@@ -1024,7 +1029,7 @@ func makeRequest(t *testing.T, api catapultAPIInterface, timerAPI timerInterface
 		c.Set("timerAPI", timerAPI)
 		c.Next()
 	})
-	require.NoError(t, getRoutes(router, db))
+	require.NoError(t, getRoutes(router, db, newVoiceMailMessage))
 	var bodyIo io.Reader
 	if len(body) > 0 && body[0] != nil {
 		rawJSON, _ := json.Marshal(body[0])

@@ -15,6 +15,7 @@ import (
 	"github.com/bandwidthcom/go-bandwidth"
 	"github.com/gin-gonic/gin"
 	"github.com/jinzhu/gorm"
+	"github.com/tuxychandru/pubsub"
 )
 
 // RegisterForm is used on used registering
@@ -39,20 +40,10 @@ type CallbackForm struct {
 
 const beepURL = "https://s3.amazonaws.com/bwdemos/beep.mp3"
 
-type newVoiceMailChannelData struct {
-	UserID  uint
-	Channel chan *VoiceMailMessage
-}
-
-var newVoiceMailChannels map[uint][]chan *VoiceMailMessage
-
-func init() {
-	newVoiceMailChannels = map[uint][]chan *VoiceMailMessage{}
-}
-
-func getRoutes(router *gin.Engine, db *gorm.DB) error {
-	addNewVoiceMessageChannel := make(chan *newVoiceMailChannelData, 0)
-	removeNewVoiceMessageChannel := make(chan *newVoiceMailChannelData, 0)
+func getRoutes(router *gin.Engine, db *gorm.DB, newVoiceMessageEvent *pubsub.PubSub) error {
+	if newVoiceMessageEvent == nil {
+		newVoiceMessageEvent = pubsub.New(1)
+	}
 
 	authMiddleware := &jwt.GinJWTMiddleware{
 		Realm:      "Bandwidth",
@@ -221,7 +212,7 @@ func getRoutes(router *gin.Engine, db *gorm.DB) error {
 		}
 		debugf("Catapult Event for transfered call: %+v\n", *form)
 		if form.Tag != "" {
-			handleVoiceMailEvent(form, db, api, newVoiceMailChannels)
+			handleVoiceMailEvent(form, db, api, newVoiceMessageEvent)
 		}
 		c.String(http.StatusOK, "")
 	})
@@ -376,54 +367,33 @@ func getRoutes(router *gin.Engine, db *gorm.DB) error {
 
 	router.GET("/voiceMessagesStream", authMiddleware.MiddlewareFunc(), func(c *gin.Context) {
 		user := c.MustGet("user").(*User)
-		channel := make(chan *VoiceMailMessage)
-		data := &newVoiceMailChannelData{UserID: user.ID, Channel: channel}
-		addNewVoiceMessageChannel <- data // subscribe to new voice messages for current user
-		defer func() {
-			removeNewVoiceMessageChannel <- data // remove subscription
-			close(channel)
-		}()
+		topic := strconv.FormatUint(uint64(user.ID), 10)
+		channel := newVoiceMessageEvent.Sub(topic)
+		defer newVoiceMessageEvent.Unsub(channel)
+		clientGone := c.Writer.CloseNotify()
 		c.Stream(func(w io.Writer) bool {
-			message := <-channel
-			json := message.ToJSONObject()
-			debugf("Received new message %+v\n", json)
-			c.SSEvent("message", json)
+			select {
+			case message := <-channel:
+				{
+					json := message.(*VoiceMailMessage).ToJSONObject()
+					debugf("Received new message %+v\n", json)
+					c.SSEvent("message", json)
+					break
+				}
+			case <-clientGone:
+				{
+					return false
+				}
+			}
 			return true
 		})
 	})
 
 	router.StaticFile("/", "./public/index.html")
-	go func() {
-		// Thread-safe handling of subscribing/unsubscribing to new voice messages
-		for {
-			select {
-			case data := <-addNewVoiceMessageChannel:
-				list := newVoiceMailChannels[data.UserID]
-				if list == nil {
-					list = []chan *VoiceMailMessage{}
-				}
-				newVoiceMailChannels[data.UserID] = append(list, data.Channel)
-
-			case data := <-removeNewVoiceMessageChannel:
-				list := newVoiceMailChannels[data.UserID]
-				if list == nil {
-					return
-				}
-				for index, channel := range list {
-					if channel == data.Channel {
-						l := len(list)
-						list[index] = list[l-1]
-						newVoiceMailChannels[data.UserID] = list[:l-1]
-						break
-					}
-				}
-			}
-		}
-	}()
 	return nil
 }
 
-func handleVoiceMailEvent(form *CallbackForm, db *gorm.DB, api catapultAPIInterface, newVoiceMailChannels map[uint][]chan *VoiceMailMessage) {
+func handleVoiceMailEvent(form *CallbackForm, db *gorm.DB, api catapultAPIInterface, newVoiceMessageEvent *pubsub.PubSub) {
 	debugf("Handle voice mail event\n")
 	user, err := getUserForCall(form, db)
 	if err != nil {
@@ -453,12 +423,8 @@ func handleVoiceMailEvent(form *CallbackForm, db *gorm.DB, api catapultAPIInterf
 			}
 
 			// send notification about new voice mail message
-			list := newVoiceMailChannels[user.ID]
-			if list == nil {
-				break
-			}
-			for _, channel := range list {
-				channel <- message
+			if newVoiceMessageEvent != nil {
+				newVoiceMessageEvent.Pub(message, strconv.FormatUint(uint64(user.ID), 10))
 			}
 		}
 	}

@@ -100,6 +100,10 @@
 			"Rev": "c5d7a69bf8a2c9c374798160849c071093e41dd1"
 		},
 		{
+			"ImportPath": "github.com/tuxychandru/pubsub",
+			"Rev": "9a40b5ef119cc81d1ca384b2726c4d58be07ddee"
+		},
+		{
 			"ImportPath": "golang.org/x/crypto/bcrypt",
 			"Rev": "2cb52d93744fdc9a51f5c87b36fe2208d424af5a"
 		},
