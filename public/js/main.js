@@ -173,9 +173,7 @@
 			})
 			.then(function(blob){
 				// download loaded data as file
-				var link = document.createElement('a');
-				link.setAttribute('href', window.URL.createObjectURL(blob));
-				link.click();
+				saveAs(blob, 'Recording' + msg.id + '.wav')
 			}, function(err){
 				setError(document, err);
 			})
