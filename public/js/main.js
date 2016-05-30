@@ -17,6 +17,10 @@
 		document.getElementsByTagName('head')[0].appendChild(fetchApi);
 	}
 
+	if (window.Notification){
+		window.Notification.requestPermission();
+	}
+
 
 	HTMLElement.prototype.show = function(){
 		this.removeAttribute('hidden');
@@ -160,23 +164,7 @@
 		});
 		item.getElementsByTagName('a')[0].addEventListener('click', function(e){
 			e.preventDefault();
-			fetch('/voiceMessages/' + msg.id + '/media', {
-				headers: {
-					'Authorization': 'Bearer ' + authData.token
-				}
-			})
-			.then(function(r){
-				if (r.ok) {
-					return r.blob();
-				}
-				throw new Error('Error on downloading file');
-			})
-			.then(function(blob){
-				// download loaded data as file
-				saveAs(blob, 'Recording' + msg.id + '.wav')
-			}, function(err){
-				setError(document, err);
-			})
+			downloadVoiceMessage(msg);
 		});
 		return item;
 	}
@@ -376,7 +364,38 @@
 			item.scrollIntoView();
 			noVoiceMailMessages.hide();
 			voiceMailMessagesList.show();
+			if (window.Notification && window.Notification.permission === 'granted') {
+				// show a notification if browser supports them (and user allowed to show them)
+				var notification = new window.Notification('New voice message', {
+					icon: 'https://catapult.inetwork.com/newStyle/images/logo.png',
+					body:  msg.from + ' - ' + startTime.toLocaleString('en') +' (' + (new Date(msg.endTime) - new Date(msg.startTime))/1000 + ' seconds)'
+				});
+				notification.addEventListener('click', function(){
+					downloadVoiceMessage(msg);
+				});
+  				setTimeout(notification.close.bind(notification), 60000);
+			}
 		});
+	}
+
+	function downloadVoiceMessage(msg) {
+		fetch('/voiceMessages/' + msg.id + '/media', {
+			headers: {
+				'Authorization': 'Bearer ' + authData.token
+			}
+		})
+		.then(function(r){
+			if (r.ok) {
+				return r.blob();
+			}
+			throw new Error('Error on downloading file');
+		})
+		.then(function(blob){
+			// download loaded data as file
+			saveAs(blob, 'Recording' + msg.id + '.wav')
+		}, function(err){
+			setError(document, err);
+		})
 	}
 
 	function setSession(s) {
