@@ -147,6 +147,9 @@
 		var remove = item.getElementsByClassName('remove')[0];
 		remove.addEventListener('click', function(e){
 			e.preventDefault();
+			if (!confirm('Would you like to remove this voice message?')) {
+				return;
+			}
 			fetch('/voiceMessages/' + msg.id, {
 				method: 'DELETE',
 				headers: {
