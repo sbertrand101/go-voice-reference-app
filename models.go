@@ -63,7 +63,37 @@ func (m *VoiceMailMessage) ToJSONObject() map[string]interface{} {
 	}
 }
 
+// ActiveCall model
+type ActiveCall struct {
+	CreatedAt time.Time `gorm:"index"`
+	User      User      `gorm:"ForeignKey:UserID"`
+	UserID    uint
+	CallID    string `gorm:"type:varchar(64),index"`
+	From      string
+	To        string
+}
+
 // AutoMigrate updates tables in db using models definitions
 func AutoMigrate(db *gorm.DB) *gorm.DB {
-	return db.AutoMigrate(&User{}, &VoiceMailMessage{})
+	execSQL := !db.HasTable(&ActiveCall{})
+	db.AutoMigrate(&User{}, &VoiceMailMessage{}, &ActiveCall{})
+	// Postgresql will remove expired records itself
+	if execSQL {
+		db.Exec(`CREATE OR REPLACE FUNCTION delete_old_rows()
+		RETURNS trigger AS
+		$BODY$
+		BEGIN
+		DELETE FROM active_calls WHERE created_at < NOW() - INTERVAL '2 hours';
+		RETURN NULL;
+		END;
+		$BODY$
+		LANGUAGE plpgsql VOLATILE
+		COST 100;`)
+		db.Exec(`CREATE TRIGGER "RemoveExpiredRecords"
+		AFTER INSERT
+		ON active_calls
+		FOR EACH ROW
+		EXECUTE PROCEDURE delete_old_rows();`)
+	}
+	return db
 }
