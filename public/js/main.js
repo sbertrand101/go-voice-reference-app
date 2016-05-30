@@ -42,6 +42,10 @@
 	var phoneNumber = document.getElementById('phoneNumber');
 	var sipDetails = document.getElementById('sipDetails');
 	var sipDetailsLink = document.getElementById('sipDetailsLink');
+	var voiceMailLink = document.getElementById('voiceMailLink');
+	var voiceMailMessages = document.getElementById('voiceMailMessages');
+	var noVoiceMailMessages = document.getElementById('noVoiceMailMessages');
+	var voiceMailMessagesList = voiceMailMessages.getElementsByTagName('ul')[0];
 	var sipUserName = document.getElementById('sipUserName');
 	var sipDomain = document.getElementById('sipDomain');
 	var sipPassword = document.getElementById('sipPassword');
@@ -106,6 +110,19 @@
 		});
 	});
 
+	voiceMailMessages.getElementsByClassName('change-greeting')[0].addEventListener('click', function(e){
+		e.preventDefault();
+		fetch('/recordGreeting', {
+			method: 'POST',
+			headers: {
+				'Authorization': 'Bearer ' + authData.token
+			}
+		})
+		.then(checkResponse, function(err){
+			setError(document, err);
+		});
+	});
+
 	function makeCall(){
 		var number = toField.value;
 		if (!number) {
@@ -118,6 +135,54 @@
 		updateDialerUI();
 	}
 
+	function addVoiceMailMessage(msg) {
+		var item = document.createElement('li');
+		var startTime = new Date(msg.startTime);
+		item.innerHTML = '<a href="#">' + msg.from + ' - ' + startTime.toLocaleString('en') +' (' + (new Date(msg.endTime) - new Date(msg.startTime))/1000 + 's)</a>' +
+			'<a href="#" class="remove"><span class="fa fa-trash"></span></a>';
+		var remove = item.getElementsByClassName('remove')[0];
+		remove.addEventListener('click', function(e){
+			e.preventDefault();
+			fetch('/voiceMessages/' + msg.id, {
+				method: 'DELETE',
+				headers: {
+					'Authorization': 'Bearer ' + authData.token
+				}
+			})
+			.then(function(r){
+				if (r.ok) {
+					return item.remove();
+				}
+				throw new Error('Error on removing message');
+			}, function(err){
+				setError(document, err);
+			})
+		});
+		item.getElementsByTagName('a')[0].addEventListener('click', function(e){
+			e.preventDefault();
+			fetch('/voiceMessages/' + msg.id + '/media', {
+				headers: {
+					'Authorization': 'Bearer ' + authData.token
+				}
+			})
+			.then(function(r){
+				if (r.ok) {
+					return r.blob();
+				}
+				throw new Error('Error on downloading file');
+			})
+			.then(function(blob){
+				// download loaded data as file
+				var link = document.createElement('a');
+				link.setAttribute('href', window.URL.createObjectURL(blob));
+				link.click();
+			}, function(err){
+				setError(document, err);
+			})
+		});
+		return item;
+	}
+
 	document.getElementById('connectCall').addEventListener('click', makeCall);
 
 	document.getElementById('answer').addEventListener('click', function(){
@@ -127,7 +192,8 @@
 	document.getElementById('hangUp').addEventListener('click', hangup);
 	document.getElementById('reject').addEventListener('click', hangup);
 
-	document.getElementById('mute').addEventListener('click', function(){
+	document.getElementById('mute').addEventListener('click', function(e){
+		e.preventDefault();
 		console.log('MUTE CLICKED');
 		if(session.isMuted().audio){
 			session.unmute({audio: true});
@@ -143,6 +209,11 @@
 		sipDetails.show();
 	});
 
+	voiceMailLink.addEventListener('click', function(){
+		voiceMailLink.style.display = 'none';
+		voiceMailMessages.show();
+	});
+
 	logOut.addEventListener('click', makeLogOut);
 
 	toField.addEventListener('keypress', function(e){
@@ -154,6 +225,7 @@
 	var i, buttons = document.getElementById('inCallButtons').getElementsByClassName('dialpad-char');
 	for(i = 0; i < buttons.length; i ++) {
 		buttons[i].addEventListener('click', function (e) {
+			e.preventDefault();
 			var digit = e.target.getAttribute('data-value');
 			console.log("Send DTMF: " + digit);
 			session.sendDTMF(digit);
@@ -282,6 +354,33 @@
 		sipDomain.innerHTML = m[2];
 	}
 
+	function setVoiceMessages(messages) {
+		(messages || []).forEach(function(msg){
+			voiceMailMessagesList.appendChild(addVoiceMailMessage(msg));
+		});
+		if (messages.length > 0) {
+			noVoiceMailMessages.hide();
+			voiceMailMessagesList.show();
+		}
+		else {
+			noVoiceMailMessages.show();
+			voiceMailMessagesList.hide();
+		}
+		if (!window.EventSource) { // if SSE supported
+			return;
+		}
+		// show new voice messages in real time (without reloading of page)
+		var source = new window.EventSource('/voiceMessagesStream?token=' + authData.token);
+		source.addEventListener('message', function(e){
+			var msg = JSON.parse(e.data);
+			var item = addEventListener(msg);
+			voiceMailMessages.insertBefore(item, voiceMailMessages.firstChild);
+			item.scrollIntoView();
+			noVoiceMailMessages.hide();
+			voiceMailMessagesList.show();
+		});
+	}
+
 	function setSession(s) {
 		if (session === s) {
 			return;
@@ -357,13 +456,16 @@
 
 	function start() {
 		authed(function(){
-			fetch("/sipData", {
-				headers: {
-					'Authorization': 'Bearer ' + authData.token
-				}
-			})
-			.then(checkResponse)
-			.then(setupPhone, function(err) {
+			var get = function(url) {
+				return fetch(url, {
+					headers: {
+						'Authorization': 'Bearer ' + authData.token
+					}
+				})
+				.then(checkResponse);
+			};
+			Promise.all([get('/sipData').then(setupPhone), get('/voiceMessages').then(setVoiceMessages)])
+			.catch(function(err) {
 				setError(document, err);
 			});
 		});

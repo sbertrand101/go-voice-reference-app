@@ -13,6 +13,7 @@ import (
 
 	"github.com/appleboy/gin-jwt"
 	"github.com/bandwidthcom/go-bandwidth"
+	j "github.com/dgrijalva/jwt-go"
 	"github.com/gin-gonic/gin"
 	"github.com/jinzhu/gorm"
 	"github.com/tuxychandru/pubsub"
@@ -245,25 +246,28 @@ func getRoutes(router *gin.Engine, db *gorm.DB, newVoiceMessageEvent *pubsub.Pub
 			c.String(http.StatusOK, "")
 			return
 		}
-		user, err := getUserForCall(form, db)
+		user, err := getUserForCall(form, db, api)
 		if err != nil {
-			debugf("Error on getting user: %s", err.Error())
+			debugf("Error on getting user: %s\n", err.Error())
 			return
 		}
 		mainMenu := func() {
-			api.CreateGather(form.CallID, &bandwidth.CreateGatherData{
+			debugf("Main menu of greating recording\n")
+			id, err := api.CreateGather(form.CallID, &bandwidth.CreateGatherData{
 				MaxDigits:         1,
-				InterDigitTimeout: 60,
+				InterDigitTimeout: 30,
 				Prompt: &bandwidth.GatherPromptData{
 					Gender:   "female",
 					Voice:    "julie",
 					Sentence: "Press 1 to listen to your current greeting. Press 2 to record new greeting. Press 3 to set greeting to default.",
 				},
 			})
+			debugf("CreateGather result %v", []interface{}{id, err})
 		}
 		switch form.EventType {
 		case "answer":
 			mainMenu()
+			break
 		case "gather":
 			{
 				if form.State == "completed" {
@@ -275,7 +279,7 @@ func getRoutes(router *gin.Engine, db *gorm.DB, newVoiceMessageEvent *pubsub.Pub
 						api.SpeakSentenceToCall(form.CallID, "Say your greeting after beep. Press any key to complete recording.")
 						api.CreateGather(form.CallID, &bandwidth.CreateGatherData{
 							MaxDigits:         1,
-							InterDigitTimeout: 60,
+							InterDigitTimeout: 30,
 							Prompt:            &bandwidth.GatherPromptData{FileURL: beepURL},
 							Tag:               "Record",
 						})
@@ -291,6 +295,7 @@ func getRoutes(router *gin.Engine, db *gorm.DB, newVoiceMessageEvent *pubsub.Pub
 					}
 
 				}
+				break
 			}
 		case "recording":
 			if form.State == "complete" {
@@ -315,6 +320,7 @@ func getRoutes(router *gin.Engine, db *gorm.DB, newVoiceMessageEvent *pubsub.Pub
 					mainMenu()
 				}
 			}
+			break
 		}
 		c.String(http.StatusOK, "")
 	})
@@ -365,10 +371,27 @@ func getRoutes(router *gin.Engine, db *gorm.DB, newVoiceMessageEvent *pubsub.Pub
 		c.Status(http.StatusOK)
 	})
 
-	router.GET("/voiceMessagesStream", authMiddleware.MiddlewareFunc(), func(c *gin.Context) {
-		user := c.MustGet("user").(*User)
-		topic := strconv.FormatUint(uint64(user.ID), 10)
-		channel := newVoiceMessageEvent.Sub(topic)
+	router.GET("/voiceMessagesStream", func(c *gin.Context) {
+
+		tokenString := c.Query("token")
+		token, err := j.Parse(tokenString, func(token *j.Token) (interface{}, error) {
+			if j.GetSigningMethod("HS256") != token.Method {
+				return nil, errors.New("Invalid signing algorithm")
+			}
+			return authMiddleware.Key, nil
+		})
+		if err != nil {
+			debugf("Error on validating JWT token: %s\n", err.Error())
+			return
+		}
+		user := &User{}
+		userID := token.Claims["id"].(string)
+		err = db.First(user, userID).Error
+		if err != nil {
+			debugf("Error on getting user data: %s\n", err.Error())
+			return
+		}
+		channel := newVoiceMessageEvent.Sub(userID)
 		defer newVoiceMessageEvent.Unsub(channel)
 		clientGone := c.Writer.CloseNotify()
 		c.Stream(func(w io.Writer) bool {
@@ -395,7 +418,7 @@ func getRoutes(router *gin.Engine, db *gorm.DB, newVoiceMessageEvent *pubsub.Pub
 
 func handleVoiceMailEvent(form *CallbackForm, db *gorm.DB, api catapultAPIInterface, newVoiceMessageEvent *pubsub.PubSub) {
 	debugf("Handle voice mail event\n")
-	user, err := getUserForCall(form, db)
+	user, err := getUserForCall(form, db, api)
 	if err != nil {
 		debugf("Error on getting user: %s\n", err.Error())
 		return
@@ -410,11 +433,13 @@ func handleVoiceMailEvent(form *CallbackForm, db *gorm.DB, api catapultAPIInterf
 		if form.State == "complete" {
 			debugf("Recording %s has been completed.\n", form.RecordingID)
 			recording, _ := api.GetRecording(form.RecordingID)
+			call, _ := api.GetCall(form.CallID)
 			message := &VoiceMailMessage{
 				MediaURL:  recording.Media,
 				StartTime: parseTime(recording.StartTime),
 				EndTime:   parseTime(recording.EndTime),
 				UserID:    user.ID,
+				From:      call.From,
 			}
 			err := db.Create(message).Error
 			if err != nil {
@@ -430,8 +455,15 @@ func handleVoiceMailEvent(form *CallbackForm, db *gorm.DB, api catapultAPIInterf
 	}
 }
 
-func getUserForCall(form *CallbackForm, db *gorm.DB) (*User, error) {
+func getUserForCall(form *CallbackForm, db *gorm.DB, api catapultAPIInterface) (*User, error) {
 	user := &User{}
+	if form.Tag == "" {
+		call, err := api.GetCall(form.CallID)
+		if err != nil {
+			return nil, err
+		}
+		form.Tag = call.Tag
+	}
 	userID, err := strconv.ParseUint(form.Tag, 10, 32)
 	if err != nil {
 		return nil, err

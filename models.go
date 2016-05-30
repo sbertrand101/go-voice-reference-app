@@ -35,6 +35,7 @@ type VoiceMailMessage struct {
 	StartTime time.Time `gorm:"index"`
 	EndTime   time.Time
 	MediaURL  string `gorm:"column:media_url;type:varchar(1024)"`
+	From      string
 }
 
 // SetPassword sets hash for password
@@ -57,6 +58,7 @@ func (m *VoiceMailMessage) ToJSONObject() map[string]interface{} {
 	return map[string]interface{}{
 		"startTime": m.StartTime,
 		"endTime":   m.EndTime,
+		"from":      m.From,
 		"id":        m.ID,
 	}
 }

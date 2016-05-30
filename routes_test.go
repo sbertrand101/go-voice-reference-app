@@ -548,6 +548,9 @@ func TestRouteTransferCallbackRecordCall(t *testing.T) {
 	user.SetPassword("123456")
 	db.Save(user)
 	db.Delete(&VoiceMailMessage{}, "user_id = ?", user.ID)
+	api.On("GetCall", "callID").Return(&bandwidth.Call{
+		From: "+1472583688",
+	}, nil)
 	api.On("GetRecording", "recordingID").Return(&bandwidth.Recording{
 		Media:     "url",
 		StartTime: "2016-05-26T10:00:00Z",

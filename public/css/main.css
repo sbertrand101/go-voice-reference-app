@@ -299,3 +299,35 @@ nav li a {
 	color: #FFF;
 	text-decoration: initial !important;
 }
+
+#voiceMailMessages ul {
+	padding-left: 0px;
+	font-size: 85%;
+	max-height: 400px;
+	overflow-x: hidden;
+	overflow-y: auto;
+	padding-top: 24px;
+}
+
+#voiceMailMessages li {
+	list-style-type: none;
+	height: 26px;
+	display: flex;
+	justify-content: space-between;
+}
+
+#voiceMailMessages li a{
+}
+
+#voiceMailMessages li a .fa{
+	margin-top: 0px;
+}
+
+#voiceMailMessages .remove {
+	font-size: 110%;
+	height: 20px;
+}
+
+#voiceMailMessages .change-greeting{
+	width: 100%;
+}
