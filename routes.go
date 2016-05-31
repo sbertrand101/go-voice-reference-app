@@ -319,7 +319,7 @@ func getRoutes(router *gin.Engine, db *gorm.DB, newVoiceMessageEvent *pubsub.Pub
 							debugf("Error on saving user's data %s\n", err.Error())
 							break
 						}
-						api.SpeakSentenceToCall(form.CallID, "Your greeting has been set to default.\n")
+						api.SpeakSentenceToCall(form.CallID, "Your greeting has been set to default.")
 						timerAPI.Sleep(time.Second)
 						mainMenu()
 						break

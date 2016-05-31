@@ -100,7 +100,7 @@ func TestGetDomainWithNewDomain(t *testing.T) {
 	domainID = ""
 	server, api := startMockCatapultServer(t, []RequestHandler{
 		RequestHandler{
-			PathAndQuery:  "/v1/users/userID/domains",
+			PathAndQuery:  "/v1/users/userID/domains?size=100",
 			Method:        http.MethodGet,
 			ContentToSend: `[]`,
 		},
@@ -123,7 +123,7 @@ func TestGetDomainWithExistingDomain(t *testing.T) {
 	domainID = ""
 	server, api := startMockCatapultServer(t, []RequestHandler{
 		RequestHandler{
-			PathAndQuery:  "/v1/users/userID/domains",
+			PathAndQuery:  "/v1/users/userID/domains?size=100",
 			Method:        http.MethodGet,
 			ContentToSend: `[{"name": "domain", "id": "0123", "description": "GolangVoiceReferenceApp's domain"}]`,
 		},
@@ -138,7 +138,7 @@ func TestGetDomainRepeating(t *testing.T) {
 	domainID = ""
 	server, api := startMockCatapultServer(t, []RequestHandler{
 		RequestHandler{
-			PathAndQuery:  "/v1/users/userID/domains",
+			PathAndQuery:  "/v1/users/userID/domains?size=100",
 			Method:        http.MethodGet,
 			ContentToSend: `[{"name": "domain1", "id": "1234", "description": "GolangVoiceReferenceApp's domain"}]`,
 		},
@@ -157,7 +157,7 @@ func TestGetDomainFail(t *testing.T) {
 	domainID = ""
 	server, api := startMockCatapultServer(t, []RequestHandler{
 		RequestHandler{
-			PathAndQuery:     "/v1/users/userID/domains",
+			PathAndQuery:     "/v1/users/userID/domains?size=100",
 			Method:           http.MethodGet,
 			StatusCodeToSend: http.StatusBadRequest,
 		},
