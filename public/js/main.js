@@ -362,8 +362,8 @@
 		var source = new window.EventSource('/voiceMessagesStream?token=' + authData.token);
 		source.addEventListener('message', function(e){
 			var msg = JSON.parse(e.data);
-			var item = addEventListener(msg);
-			voiceMailMessages.insertBefore(item, voiceMailMessages.firstChild);
+			var item = addVoiceMailMessage(msg);
+			voiceMailMessagesList.insertBefore(item, voiceMailMessagesList.firstChild);
 			item.scrollIntoView();
 			noVoiceMailMessages.hide();
 			voiceMailMessagesList.show();
@@ -371,12 +371,12 @@
 				// show a notification if browser supports them (and user allowed to show them)
 				var notification = new window.Notification('New voice message', {
 					icon: 'https://catapult.inetwork.com/newStyle/images/logo.png',
-					body:  msg.from + ' - ' + startTime.toLocaleString('en') +' (' + (new Date(msg.endTime) - new Date(msg.startTime))/1000 + ' seconds)'
+					body:  msg.from + ' at ' + new Date(msg.startTime).toLocaleString('en') +'\n' + (new Date(msg.endTime) - new Date(msg.startTime))/1000 + ' seconds'
 				});
 				notification.addEventListener('click', function(){
 					downloadVoiceMessage(msg);
 				});
-  				setTimeout(notification.close.bind(notification), 60000);
+  				setTimeout(notification.close.bind(notification), 10000);
 			}
 		});
 	}

@@ -424,27 +424,22 @@ func getRoutes(router *gin.Engine, db *gorm.DB, newVoiceMessageEvent *pubsub.Pub
 		}
 		channel := newVoiceMessageEvent.Sub(userID)
 		defer newVoiceMessageEvent.Unsub(channel)
-		clientGone := c.Writer.CloseNotify()
+		debugf("Started streaming of new voice messages\n")
 		c.Stream(func(w io.Writer) bool {
-			select {
-			case message := <-channel:
-				{
-					json := message.(*VoiceMailMessage).ToJSONObject()
-					debugf("Received new message %+v\n", json)
-					c.SSEvent("message", json)
-					break
-				}
-			case <-clientGone:
-				{
-					return false
-				}
-			}
-			return true
+			return steamNewVoceMailMessage(w, c, channel)
 		})
 	})
 
 	router.StaticFile("/", "./public/index.html")
 	return nil
+}
+
+func steamNewVoceMailMessage(w io.Writer, c *gin.Context, channel chan interface{}) bool {
+	message := <-channel
+	json := message.(*VoiceMailMessage).ToJSONObject()
+	debugf("Received new message %+v\n", json)
+	c.SSEvent("message", json)
+	return true
 }
 
 func handleVoiceMailEvent(form *CallbackForm, db *gorm.DB, api catapultAPIInterface, newVoiceMessageEvent *pubsub.PubSub) {
