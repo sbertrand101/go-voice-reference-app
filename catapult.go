@@ -82,7 +82,7 @@ func (api *catapultAPI) GetDomain() (string, string, error) {
 	if domainID != "" {
 		return domainID, domainName, nil
 	}
-	domains, err := api.client.GetDomains()
+	domains, err := api.client.GetDomains(&bandwidth.GetDomainsQuery{Size: 100})
 	if err != nil {
 		return "", "", err
 	}

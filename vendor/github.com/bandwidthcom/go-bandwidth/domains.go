@@ -14,10 +14,19 @@ type Domain struct {
 	Description string `json:"description"`
 }
 
+// GetDomainsQuery is optional parameters of GetDomains()
+type GetDomainsQuery struct {
+	Size int
+}
+
 // GetDomains returns  a list of the domains that have been created
 // It returns list of Domain instances or error
-func (api *Client) GetDomains() ([]*Domain, error) {
-	result, _, err := api.makeRequest(http.MethodGet, api.concatUserPath(domainsPath), &[]*Domain{})
+func (api *Client) GetDomains(query ...*GetDomainsQuery) ([]*Domain, error) {
+	var options *GetDomainsQuery
+	if len(query) > 0 {
+		options = query[0]
+	}
+	result, _, err := api.makeRequest(http.MethodGet, api.concatUserPath(domainsPath), &[]*Domain{}, options)
 	if err != nil {
 		return nil, err
 	}

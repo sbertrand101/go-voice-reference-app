@@ -68,7 +68,7 @@ type ActiveCall struct {
 	CreatedAt time.Time `gorm:"index"`
 	User      User      `gorm:"ForeignKey:UserID"`
 	UserID    uint
-	CallID    string `gorm:"type:varchar(64),index"`
+	CallID    string `gorm:"index"`
 	From      string
 	To        string
 }
@@ -79,6 +79,7 @@ func AutoMigrate(db *gorm.DB) *gorm.DB {
 	db.AutoMigrate(&User{}, &VoiceMailMessage{}, &ActiveCall{})
 	// Postgresql will remove expired records itself
 	if execSQL {
+		time.Sleep(2 * time.Second)
 		db.Exec(`CREATE OR REPLACE FUNCTION delete_old_rows()
 		RETURNS trigger AS
 		$BODY$
