@@ -412,21 +412,21 @@ func getRoutes(router *gin.Engine, db *gorm.DB, newVoiceMessageEvent *pubsub.Pub
 			return authMiddleware.Key, nil
 		})
 		if err != nil {
-			debugf("Error on validating JWT token: %s\n", err.Error())
+			setError(c, http.StatusBadRequest, err, "Error on validating JWT token")
 			return
 		}
 		user := &User{}
 		userID := token.Claims["id"].(string)
 		err = db.First(user, userID).Error
 		if err != nil {
-			debugf("Error on getting user data: %s\n", err.Error())
+			setError(c, http.StatusBadGateway, err, "Error on getting user's data")
 			return
 		}
 		channel := newVoiceMessageEvent.Sub(userID)
 		defer newVoiceMessageEvent.Unsub(channel)
 		debugf("Started streaming of new voice messages\n")
 		c.Stream(func(w io.Writer) bool {
-			return steamNewVoceMailMessage(w, c, channel)
+			return streamNewVoceMailMessage(c, channel)
 		})
 	})
 
@@ -434,7 +434,11 @@ func getRoutes(router *gin.Engine, db *gorm.DB, newVoiceMessageEvent *pubsub.Pub
 	return nil
 }
 
-func steamNewVoceMailMessage(w io.Writer, c *gin.Context, channel chan interface{}) bool {
+type sseEmiter interface {
+	SSEvent(name string, message interface{})
+}
+
+func streamNewVoceMailMessage(c sseEmiter, channel chan interface{}) bool {
 	message := <-channel
 	json := message.(*VoiceMailMessage).ToJSONObject()
 	debugf("Received new message %+v\n", json)

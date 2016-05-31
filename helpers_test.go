@@ -192,3 +192,11 @@ type fakeTimerAPI struct {
 func (m *fakeTimerAPI) Sleep(d time.Duration) {
 	m.Called(d)
 }
+
+type fakeSSEEmiter struct {
+	mock.Mock
+}
+
+func (m *fakeSSEEmiter) SSEvent(name string, message interface{}) {
+	m.Called(name, message)
+}

@@ -10,7 +10,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
-	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -986,6 +985,24 @@ func TestRouteDeleteVoiceMessageFail(t *testing.T) {
 	assert.Equal(t, http.StatusBadGateway, w.Code)
 }
 
+func TestStreamNewVoceMailMessage(t *testing.T) {
+	msg := &VoiceMailMessage{
+		StartTime: parseTime("2016-05-31T10:00:00Z"),
+		EndTime:   parseTime("2016-05-31T10:01:00Z"),
+		From:      "+1234567980",
+	}
+	msg.ID = 1
+	context := &fakeSSEEmiter{}
+	context.On("SSEvent", "message", msg.ToJSONObject()).Return()
+	channel := make(chan interface{})
+	defer close(channel)
+	go func() {
+		time.Sleep(10 * time.Millisecond)
+		channel <- msg
+	}()
+	assert.True(t, streamNewVoceMailMessage(context, channel))
+}
+
 func TestRouteGetVoiceMessageStream(t *testing.T) {
 	api := &fakeCatapultAPI{}
 	db := openDBConnection(t)
@@ -993,27 +1010,12 @@ func TestRouteGetVoiceMessageStream(t *testing.T) {
 	token := createUserAndLogin(t, db)
 	user := &User{}
 	db.First(user, "user_name = ?", "user1")
-	message := &VoiceMailMessage{
-		MediaURL:  "http://some-host/name1",
-		StartTime: time.Now(),
-		EndTime:   time.Now(),
-		UserID:    user.ID,
-	}
-	db.Create(message)
-	closer = make(chan bool, 1)
-	newVoiceMailMessage = pubsub.New(1)
 	go func() {
-		makeRequest(t, api, nil, db, http.MethodGet, "/voiceMessagesStream", token)
+		makeRequest(t, api, nil, db, http.MethodGet, fmt.Sprintf("/voiceMessagesStream?token=%s", token), "")
 	}()
-	time.Sleep(10 * time.Millisecond)
-	newVoiceMailMessage.Pub(message, strconv.FormatUint(uint64(user.ID), 10))
-	time.Sleep(50 * time.Millisecond)
-	closer <- true
-	time.Sleep(20 * time.Millisecond)
-	close(closer)
+	time.Sleep(100 * time.Millisecond)
 }
 
-var closer chan bool
 var newVoiceMailMessage *pubsub.PubSub
 
 func makeRequest(t *testing.T, api catapultAPIInterface, timerAPI timerInterface, db *gorm.DB, method, path, authToken string, body ...interface{}) *responseRecorder {
@@ -1055,7 +1057,7 @@ type responseRecorder struct {
 }
 
 func (r *responseRecorder) CloseNotify() <-chan bool {
-	return closer
+	return make(chan bool)
 }
 
 func createUserAndLogin(t *testing.T, db *gorm.DB) string {
