@@ -415,7 +415,12 @@
 			session.on('failed', function(){
 				setSession(null);
 			});
-			session.on('confirmed', function(){
+			session.on('confirmed', function(e){
+				var localStream = session.connection.getLocalStreams()[0];
+				var dtmfSender = session.connection.createDTMFSender(localStream.getAudioTracks()[0])
+				session.sendDTMF = function(tone){
+					dtmfSender.insertDTMF(tone);
+				};
 				updateDialerUI();
 			});
 			session.on('addstream', function(e){
