@@ -6,6 +6,7 @@ import (
 	"math/rand"
 	"net/http"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/bandwidthcom/go-bandwidth"
@@ -37,6 +38,7 @@ type catapultAPIInterface interface {
 	GetRecording(recordingID string) (*bandwidth.Recording, error)
 	CreateCall(data *bandwidth.CreateCallData) (string, error)
 	DownloadMediaFile(name string) (io.ReadCloser, string, error)
+	GetCallRecordings(callID string) ([]*bandwidth.Recording, error)
 }
 
 func newCatapultAPI(context *gin.Context) (*catapultAPI, error) {
@@ -69,7 +71,7 @@ func (api *catapultAPI) GetApplicationID() (string, error) {
 	applicationID, err = api.client.CreateApplication(&bandwidth.ApplicationData{
 		Name:               appName,
 		AutoAnswer:         true,
-		CallbackHTTPMethod: "POST",
+		CallbackHTTPMethod: "GET",
 		IncomingCallURL:    fmt.Sprintf("http://%s/callCallback", host),
 	})
 	if applicationID != "" {
@@ -188,12 +190,61 @@ func (api *catapultAPI) GetRecording(recordingID string) (*bandwidth.Recording, 
 	return api.client.GetRecording(recordingID)
 }
 
+func (api *catapultAPI) GetCallRecordings(callID string) ([]*bandwidth.Recording, error) {
+	return api.client.GetCallRecordings(callID)
+}
+
 func (api *catapultAPI) CreateCall(data *bandwidth.CreateCallData) (string, error) {
 	return api.client.CreateCall(data)
 }
 
 func (api *catapultAPI) DownloadMediaFile(name string) (io.ReadCloser, string, error) {
 	return api.client.DownloadMediaFile(name)
+}
+
+func buildBXML(items ...string) string {
+	return fmt.Sprintf(`<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+	%s
+</Response>`, strings.Join(items, "\n\t"))
+}
+
+func hangupBXML() string {
+	return "<Hangup/>"
+}
+
+func playAudioBXML(url string) string {
+	return fmt.Sprintf(`<PlayAudio>%s</PlayAudio>`, url)
+}
+
+func transferBXML(transferTo string, transferCallerID string, timeout int, requestURL string, tag string) string {
+	attrs := ""
+	if timeout > 0 {
+		attrs = fmt.Sprintf(`%s callTimeout="%d"`, attrs, timeout)
+	}
+	if requestURL != "" {
+		attrs = fmt.Sprintf(`%s requestUrl="%s"`, attrs, requestURL)
+	}
+	if tag != "" {
+		attrs = fmt.Sprintf(`%s tag="%s"`, attrs, tag)
+	}
+	return fmt.Sprintf(`<Transfer transferTo="%s" transferCallerId="%s"%s/>`, transferTo, transferCallerID, attrs)
+}
+
+func speakSentenceBXML(sentence string) string {
+	return fmt.Sprintf(`<SpeakSentence locale="en_US" gender="female" voice="julie">%s</SpeakSentence>`, sentence)
+}
+
+func recordBXML(requestURL string, terminatingDigits ...string) string {
+	digits := "#"
+	if len(terminatingDigits) > 0 {
+		digits = terminatingDigits[0]
+	}
+	return fmt.Sprintf(`<Record requestUrl="%s" terminatingDigits="%s" maxDuration="3600"/>`, requestURL, digits)
+}
+
+func gatherBXML(requestURL string, children ...string) string {
+	return fmt.Sprintf(`<Gather requestUrl="%s" maxDigits="1" interDigitTimeout="30">%s</Gather>`, requestURL, strings.Join(children, ""))
 }
 
 func catapultMiddleware(c *gin.Context) {

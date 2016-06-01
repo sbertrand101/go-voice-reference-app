@@ -185,6 +185,11 @@ func (m *fakeCatapultAPI) DownloadMediaFile(name string) (io.ReadCloser, string,
 	return args.Get(0).(io.ReadCloser), args.String(1), args.Error(2)
 }
 
+func (m *fakeCatapultAPI) GetCallRecordings(callID string) ([]*bandwidth.Recording, error) {
+	args := m.Called(callID)
+	return args.Get(0).([]*bandwidth.Recording), args.Error(1)
+}
+
 type fakeTimerAPI struct {
 	mock.Mock
 }
