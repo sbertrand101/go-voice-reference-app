@@ -270,17 +270,7 @@ func TestRouteCallCallbackOutgoingCall(t *testing.T) {
 	}
 	user.SetPassword("123456")
 	db.Save(user)
-	api.On("UpdateCall", "callID", &bandwidth.UpdateCallData{
-		State:            "transferring",
-		TransferTo:       "+1472583690",
-		TransferCallerID: "+1234567891",
-	}).Return("", nil)
-	w := makeRequest(t, api, nil, db, http.MethodPost, "/callCallback", "", &CallbackForm{
-		CallID:    "callID",
-		EventType: "answer",
-		From:      "sip:otest@test.com",
-		To:        "+1472583690",
-	})
+	w := makeRequest(t, api, nil, db, http.MethodGet, "/callCallback?callId=callID&eventType=answer&from=sip:otest@test.com&to=+1472583690", "")
 	assert.Equal(t, http.StatusOK, w.Code)
 	api.AssertExpectations(t)
 	api.On("GetCall", "").Return(&bandwidth.Call{}, nil)
@@ -298,18 +288,7 @@ func TestRouteCallCallbackIncomingCall(t *testing.T) {
 	}
 	user.SetPassword("123456")
 	db.Save(user)
-	api.On("UpdateCall", "callID", &bandwidth.UpdateCallData{
-		State:            "transferring",
-		TransferTo:       "sip:itest@test.com",
-		TransferCallerID: "+1472583688",
-		CallbackURL:      "http:///transferCallback",
-	}).Return("", nil)
-	w := makeRequest(t, api, nil, db, http.MethodPost, "/callCallback", "", &CallbackForm{
-		CallID:    "callID",
-		EventType: "answer",
-		From:      "+1472583688",
-		To:        "+1234567892",
-	})
+	w := makeRequest(t, api, nil, db, http.MethodGet, "/callCallback?callId=callID&eventType=answer&from=+1472583688&to=+1234567892", "")
 	assert.Equal(t, http.StatusOK, w.Code)
 	api.AssertExpectations(t)
 	api.On("GetCall", "").Return(&bandwidth.Call{}, nil)
@@ -335,18 +314,7 @@ func TestRouteCallCallbackIncomingCallSipToSip(t *testing.T) {
 	}
 	user2.SetPassword("123456")
 	db.Save(user2)
-	api.On("UpdateCall", "callID", &bandwidth.UpdateCallData{
-		State:            "transferring",
-		TransferTo:       "sip:i1test@test.com",
-		TransferCallerID: "+1234567802",
-		CallbackURL:      "http:///transferCallback",
-	}).Return("", nil)
-	w := makeRequest(t, api, nil, db, http.MethodPost, "/callCallback", "", &CallbackForm{
-		CallID:    "callID",
-		EventType: "answer",
-		From:      "sip:i2test@test.com",
-		To:        "+1234567801",
-	})
+	w := makeRequest(t, api, nil, db, http.MethodGet, "/callCallback?callId=callID&eventType=answer&from=sip:i2test@test.com&to=+1234567801", "")
 	assert.Equal(t, http.StatusOK, w.Code)
 	api.AssertExpectations(t)
 	api.On("GetCall", "").Return(&bandwidth.Call{}, nil)
@@ -356,201 +324,10 @@ func TestRouteCallCallbackWithUnknownNumber(t *testing.T) {
 	api := &fakeCatapultAPI{}
 	db := openDBConnection(t)
 	defer db.Close()
-	w := makeRequest(t, api, nil, db, http.MethodPost, "/callCallback", "", &CallbackForm{
-		CallID:    "newCallID",
-		EventType: "answer",
-		From:      "+1472583688",
-		To:        "+1456567890",
-	})
+	w := makeRequest(t, api, nil, db, http.MethodGet, "/callCallback?callId=newCallID&eventType=answer&from=+1472583688&to=+1456567890", "")
 	assert.Equal(t, http.StatusOK, w.Code)
 	api.AssertNotCalled(t, "UpdateCall")
 	api.On("GetCall", "").Return(&bandwidth.Call{}, nil)
-}
-
-func TestRouteCallCallbackIncomingCallRedirectToVoiceMail(t *testing.T) {
-	api := &fakeCatapultAPI{}
-	timerAPI := &fakeTimerAPI{}
-	db := openDBConnection(t)
-	defer db.Close()
-	user := &User{
-		AreaCode:    "910",
-		SIPURI:      "sip:vmtest@test.com",
-		PhoneNumber: "+1234567800",
-		UserName:    "vmiuser",
-	}
-	user.SetPassword("123456")
-	db.Save(user)
-	api.On("UpdateCall", "callID", &bandwidth.UpdateCallData{
-		State:            "transferring",
-		TransferTo:       "sip:vmtest@test.com",
-		TransferCallerID: "+1472583688",
-		CallbackURL:      "http:///transferCallback",
-	}).Return("111", nil)
-	api.On("GetCall", "111").Return(&bandwidth.Call{
-		State: "started",
-	}, nil)
-	api.On("UpdateCall", "111", &bandwidth.UpdateCallData{
-		State: "active",
-	}).Return("111", nil)
-	timerAPI.On("Sleep", 15*time.Second).Return()
-	w := makeRequest(t, api, timerAPI, db, http.MethodPost, "/callCallback", "", &CallbackForm{
-		CallID:    "callID",
-		EventType: "answer",
-		From:      "+1472583688",
-		To:        "+1234567800",
-	})
-	assert.Equal(t, http.StatusOK, w.Code)
-	time.Sleep(5 * time.Millisecond)
-	timerAPI.AssertExpectations(t)
-	api.AssertExpectations(t)
-	api.On("GetCall", "").Return(&bandwidth.Call{}, nil)
-}
-
-func TestRouteCallCallbackIncomingCallDoNothingForAnsweredAndCompletedCalls(t *testing.T) {
-	api := &fakeCatapultAPI{}
-	timerAPI := &fakeTimerAPI{}
-	db := openDBConnection(t)
-	defer db.Close()
-	user := &User{
-		AreaCode:    "910",
-		SIPURI:      "sip:vmtest1@test.com",
-		PhoneNumber: "+1234567800",
-		UserName:    "vmi1user",
-	}
-	user.SetPassword("123456")
-	db.Save(user)
-	api.On("UpdateCall", "callID", &bandwidth.UpdateCallData{
-		State:            "transferring",
-		TransferTo:       "sip:vmtest1@test.com",
-		TransferCallerID: "+1472583688",
-		CallbackURL:      "http:///transferCallback",
-	}).Return("111", nil)
-	api.On("GetCall", "111").Return(&bandwidth.Call{
-		State: "active",
-	}, nil)
-	timerAPI.On("Sleep", 15*time.Second).Return()
-	w := makeRequest(t, api, timerAPI, db, http.MethodPost, "/callCallback", "", &CallbackForm{
-		CallID:    "callID",
-		EventType: "answer",
-		From:      "+1472583688",
-		To:        "+1234567800",
-	})
-	assert.Equal(t, http.StatusOK, w.Code)
-	time.Sleep(5 * time.Millisecond)
-	timerAPI.AssertExpectations(t)
-	api.AssertExpectations(t)
-	api.On("GetCall", "").Return(&bandwidth.Call{}, nil)
-}
-
-func TestRouteTransferCallbackDoNothingForMissingUser(t *testing.T) {
-	api := &fakeCatapultAPI{}
-	db := openDBConnection(t)
-	w := makeRequest(t, api, nil, db, http.MethodPost, "/transferCallback", "", &CallbackForm{
-		CallID:    "callID",
-		EventType: "answer",
-		From:      "+1472583688",
-		To:        "+1234567800",
-	})
-	assert.Equal(t, http.StatusOK, w.Code)
-}
-
-func TestRouteTransferCallbackDoNothingForWrongUserID(t *testing.T) {
-	api := &fakeCatapultAPI{}
-	db := openDBConnection(t)
-	w := makeRequest(t, api, nil, db, http.MethodPost, "/transferCallback", "", &CallbackForm{
-		CallID:    "callID",
-		EventType: "answer",
-		From:      "+1472583688",
-		To:        "+1234567800",
-	})
-	assert.Equal(t, http.StatusOK, w.Code)
-}
-
-func TestRouteTransferCallbackAnswerCall(t *testing.T) {
-	api := &fakeCatapultAPI{}
-	db := openDBConnection(t)
-	defer db.Close()
-	user := &User{
-		AreaCode:    "910",
-		SIPURI:      "sip:atest@test.com",
-		PhoneNumber: "+1234567801",
-		UserName:    "avmuser",
-		GreetingURL: "greetingURL",
-	}
-	user.SetPassword("123456")
-	db.Save(user)
-	api.On("PlayAudioToCall", "callID", "greetingURL").Return(nil)
-	api.On("PlayAudioToCall", "callID", beepURL).Return(nil)
-	api.On("UpdateCall", "callID", &bandwidth.UpdateCallData{RecordingEnabled: true}).Return("", nil)
-	w := makeRequest(t, api, nil, db, http.MethodPost, "/transferCallback", "", &CallbackForm{
-		CallID:    "callID",
-		EventType: "answer",
-		From:      "+1472583688",
-		To:        "+1234567801",
-	})
-	assert.Equal(t, http.StatusOK, w.Code)
-	api.AssertExpectations(t)
-}
-
-func TestRouteTransferCallbackAnswerCallWithDefaultGreeting(t *testing.T) {
-	api := &fakeCatapultAPI{}
-	db := openDBConnection(t)
-	defer db.Close()
-	user := &User{
-		AreaCode:    "910",
-		SIPURI:      "sip:atest@test.com",
-		PhoneNumber: "+1234567802",
-		UserName:    "avm1user",
-	}
-	user.SetPassword("123456")
-	db.Save(user)
-	api.On("SpeakSentenceToCall", "callID", fmt.Sprintf("Hello. You have called to %s. Please leave a message after beep.", user.PhoneNumber)).Return(nil)
-	api.On("PlayAudioToCall", "callID", beepURL).Return(nil)
-	api.On("UpdateCall", "callID", &bandwidth.UpdateCallData{RecordingEnabled: true}).Return("", nil)
-	w := makeRequest(t, api, nil, db, http.MethodPost, "/transferCallback", "", &CallbackForm{
-		CallID:    "callID",
-		EventType: "answer",
-		From:      "+1472583688",
-		To:        "+1234567802",
-	})
-	assert.Equal(t, http.StatusOK, w.Code)
-	api.AssertExpectations(t)
-}
-
-func TestRouteTransferCallbackRecordCall(t *testing.T) {
-	api := &fakeCatapultAPI{}
-	db := openDBConnection(t)
-	defer db.Close()
-	user := &User{
-		AreaCode:    "910",
-		SIPURI:      "sip:atest@test.com",
-		PhoneNumber: "+1234567803",
-		UserName:    "avm2user",
-	}
-	user.SetPassword("123456")
-	db.Save(user)
-	db.Delete(&VoiceMailMessage{}, "user_id = ?", user.ID)
-	api.On("GetCall", "callID").Return(&bandwidth.Call{
-		From: "+1472583688",
-	}, nil)
-	api.On("GetRecording", "recordingID").Return(&bandwidth.Recording{
-		Media:     "url",
-		StartTime: "2016-05-26T10:00:00Z",
-		EndTime:   "2016-05-26T10:01:00Z",
-	}, nil)
-	w := makeRequest(t, api, nil, db, http.MethodPost, "/transferCallback", "", &CallbackForm{
-		CallID:      "callID",
-		EventType:   "recording",
-		State:       "complete",
-		From:        "+1472583688",
-		To:          "+1234567803",
-		RecordingID: "recordingID",
-	})
-	assert.Equal(t, http.StatusOK, w.Code)
-	api.AssertExpectations(t)
-	message := &VoiceMailMessage{}
-	assert.NoError(t, db.First(message, "user_id = ?", user.ID).Error)
-	assert.Equal(t, "url", message.MediaURL)
 }
 
 func TestRouteRecordGreeting(t *testing.T) {
@@ -560,11 +337,6 @@ func TestRouteRecordGreeting(t *testing.T) {
 	token := createUserAndLogin(t, db)
 	user := &User{}
 	db.First(user, "user_name = ?", "user1")
-	api.On("CreateCall", &bandwidth.CreateCallData{
-		From:        user.PhoneNumber,
-		To:          user.SIPURI,
-		CallbackURL: "http:///recordCallback",
-	}).Return("callId", nil)
 	w := makeRequest(t, api, nil, db, http.MethodPost, "/recordGreeting", token)
 	assert.Equal(t, http.StatusOK, w.Code)
 	api.AssertExpectations(t)
@@ -574,10 +346,7 @@ func TestRouteRecordCallbackWithoutUser(t *testing.T) {
 	api := &fakeCatapultAPI{}
 	db := openDBConnection(t)
 	defer db.Close()
-	w := makeRequest(t, api, nil, db, http.MethodPost, "/recordCallback", "", &CallbackForm{
-		CallID:    "callID",
-		EventType: "answer",
-	})
+	w := makeRequest(t, api, nil, db, http.MethodPost, "/recordCallback?callId=callID&eventType=answer", "")
 	assert.Equal(t, http.StatusOK, w.Code)
 }
 
@@ -593,20 +362,7 @@ func TestRouteRecordCallbackAnswer(t *testing.T) {
 	}
 	user.SetPassword("123456")
 	db.Save(user)
-	api.On("CreateGather", "callID", &bandwidth.CreateGatherData{
-		MaxDigits:         1,
-		InterDigitTimeout: 30,
-		Prompt: &bandwidth.GatherPromptData{
-			Gender:   "female",
-			Voice:    "julie",
-			Sentence: "Press 1 to listen to your current greeting. Press 2 to record new greeting. Press 3 to set greeting to default.",
-		},
-		Tag: "Menu",
-	}).Return("", nil)
-	w := makeRequest(t, api, nil, db, http.MethodPost, "/recordCallback", "", &CallbackForm{
-		CallID:    "callID",
-		EventType: "answer",
-	})
+	w := makeRequest(t, api, nil, db, http.MethodPost, "/recordCallback?callId=callID&eventType=answer", "")
 	assert.Equal(t, http.StatusOK, w.Code)
 	api.AssertExpectations(t)
 }
@@ -625,24 +381,7 @@ func TestRouteRecordCallbackGather1(t *testing.T) {
 	}
 	user.SetPassword("123456")
 	db.Save(user)
-	api.On("PlayAudioToCall", "callID", "greetingURL").Return(nil)
-	api.On("CreateGather", "callID", &bandwidth.CreateGatherData{
-		MaxDigits:         1,
-		InterDigitTimeout: 30,
-		Prompt: &bandwidth.GatherPromptData{
-			Gender:   "female",
-			Voice:    "julie",
-			Sentence: "Press 1 to listen to your current greeting. Press 2 to record new greeting. Press 3 to set greeting to default.",
-		},
-		Tag: "Menu",
-	}).Return("", nil)
-	timer.On("Sleep", time.Second).Return()
-	w := makeRequest(t, api, timer, db, http.MethodPost, "/recordCallback", "", &CallbackForm{
-		CallID:    "callID",
-		EventType: "gather",
-		State:     "completed",
-		Digits:    "1",
-	})
+	w := makeRequest(t, api, timer, db, http.MethodPost, "/recordCallback?callId=callID&eventType=gather&state=completed&digits=1", "")
 	assert.Equal(t, http.StatusOK, w.Code)
 	api.AssertExpectations(t)
 }
@@ -661,22 +400,7 @@ func TestRouteRecordCallbackGather2(t *testing.T) {
 	}
 	user.SetPassword("123456")
 	db.Save(user)
-	api.On("SpeakSentenceToCall", "callID", "Say your greeting after beep. Press any key to complete recording.").Return(nil)
-	api.On("CreateGather", "callID", &bandwidth.CreateGatherData{
-		MaxDigits:         1,
-		InterDigitTimeout: 30,
-		Prompt:            &bandwidth.GatherPromptData{FileURL: beepURL},
-		Tag:               "Record",
-	}).Return("", nil)
-	api.On("UpdateCall", "callID", &bandwidth.UpdateCallData{RecordingEnabled: true}).Return("", nil)
-	timer.On("Sleep", 5*time.Second).Return()
-	timer.On("Sleep", time.Second).Return()
-	w := makeRequest(t, api, timer, db, http.MethodPost, "/recordCallback", "", &CallbackForm{
-		CallID:    "callID",
-		EventType: "gather",
-		State:     "completed",
-		Digits:    "2",
-	})
+	w := makeRequest(t, api, timer, db, http.MethodPost, "/recordCallback?callId=callID&eventType=gather&state=completed&digits=2", "")
 	assert.Equal(t, http.StatusOK, w.Code)
 	api.AssertExpectations(t)
 }
@@ -695,24 +419,7 @@ func TestRouteRecordCallbackGather3(t *testing.T) {
 	}
 	user.SetPassword("123456")
 	db.Save(user)
-	api.On("SpeakSentenceToCall", "callID", "Your greeting has been set to default.").Return(nil)
-	api.On("CreateGather", "callID", &bandwidth.CreateGatherData{
-		MaxDigits:         1,
-		InterDigitTimeout: 30,
-		Prompt: &bandwidth.GatherPromptData{
-			Gender:   "female",
-			Voice:    "julie",
-			Sentence: "Press 1 to listen to your current greeting. Press 2 to record new greeting. Press 3 to set greeting to default.",
-		},
-		Tag: "Menu",
-	}).Return("", nil)
-	timer.On("Sleep", time.Second).Return()
-	w := makeRequest(t, api, timer, db, http.MethodPost, "/recordCallback", "", &CallbackForm{
-		CallID:    "callID",
-		EventType: "gather",
-		State:     "completed",
-		Digits:    "3",
-	})
+	w := makeRequest(t, api, timer, db, http.MethodPost, "/recordCallback?callId=callID&eventType=gather&state=completed&digits=3", "")
 	assert.Equal(t, http.StatusOK, w.Code)
 	api.AssertExpectations(t)
 	assert.NoError(t, db.First(user, user.ID).Error)
@@ -725,28 +432,7 @@ func TestRouteRecordCallbackGatherCompleteRecord(t *testing.T) {
 	timer := &fakeTimerAPI{}
 	db := openDBConnection(t)
 	defer db.Close()
-	api.On("UpdateCall", "callID", &bandwidth.UpdateCallData{
-		RecordingEnabled: false,
-	}).Return("", nil)
-	api.On("SpeakSentenceToCall", "callID", "Your greeting has been changed.").Return(nil)
-	api.On("CreateGather", "callID", &bandwidth.CreateGatherData{
-		MaxDigits:         1,
-		InterDigitTimeout: 30,
-		Tag:               "Menu",
-		Prompt: &bandwidth.GatherPromptData{
-			Gender:   "female",
-			Voice:    "julie",
-			Sentence: "Press 1 to listen to your current greeting. Press 2 to record new greeting. Press 3 to set greeting to default.",
-		},
-	}).Return("", nil)
-	timer.On("Sleep", time.Second).Return()
-	w := makeRequest(t, api, timer, db, http.MethodPost, "/recordCallback", "", &CallbackForm{
-		CallID:    "callID",
-		EventType: "gather",
-		State:     "completed",
-		Tag:       "Record",
-		Digits:    "0",
-	})
+	w := makeRequest(t, api, timer, db, http.MethodPost, "/recordCallback?callId=callID&eventType=gather&state=completed&digits=0", "")
 	assert.Equal(t, http.StatusOK, w.Code)
 	api.AssertExpectations(t)
 }
@@ -781,12 +467,7 @@ func TestRouteRecordCallbackSaveRecording(t *testing.T) {
 		},
 		Tag: "Menu",
 	}).Return("", nil)
-	w := makeRequest(t, api, nil, db, http.MethodPost, "/recordCallback", "", &CallbackForm{
-		CallID:      "callID",
-		EventType:   "recording",
-		State:       "complete",
-		RecordingID: "recordingID",
-	})
+	w := makeRequest(t, api, nil, db, http.MethodPost, "/recordCallback?callId=callID&eventType=recording&state=complete&recordingId=recordingID", "")
 	assert.Equal(t, http.StatusOK, w.Code)
 	api.AssertExpectations(t)
 	assert.NoError(t, db.First(user, user.ID).Error)
@@ -813,12 +494,7 @@ func TestRouteRecordCallbackSaveRecordingWithoutMenu(t *testing.T) {
 	api.On("GetCall", "callID").Return(&bandwidth.Call{
 		State: "completed",
 	}, nil)
-	w := makeRequest(t, api, nil, db, http.MethodPost, "/recordCallback", "", &CallbackForm{
-		CallID:      "callID",
-		EventType:   "recording",
-		State:       "complete",
-		RecordingID: "recordingID",
-	})
+	w := makeRequest(t, api, nil, db, http.MethodPost, "/recordCallback?callId=callID&eventType=recording&state=complete&recordingId=recordingID", "")
 	assert.Equal(t, http.StatusOK, w.Code)
 	api.AssertExpectations(t)
 	assert.NoError(t, db.First(user, user.ID).Error)
@@ -842,12 +518,7 @@ func TestRouteRecordCallbackSaveRecordingWithoutMenu2(t *testing.T) {
 		Media: "url",
 	}, nil)
 	api.On("GetCall", "callID").Return(&bandwidth.Call{}, errors.New("Error"))
-	w := makeRequest(t, api, nil, db, http.MethodPost, "/recordCallback", "", &CallbackForm{
-		CallID:      "callID",
-		EventType:   "recording",
-		State:       "complete",
-		RecordingID: "recordingID",
-	})
+	w := makeRequest(t, api, nil, db, http.MethodPost, "/recordCallback?callId=callID&eventType=recording&state=complete&recordingId=recordingID", "")
 	assert.Equal(t, http.StatusOK, w.Code)
 	api.AssertExpectations(t)
 	assert.NoError(t, db.First(user, user.ID).Error)
@@ -868,12 +539,7 @@ func TestRouteRecordCallbackDoNothingForWrongRecordingID(t *testing.T) {
 	user.SetPassword("123456")
 	db.Save(user)
 	api.On("GetRecording", "recordingID").Return(&bandwidth.Recording{}, errors.New("Error"))
-	w := makeRequest(t, api, nil, db, http.MethodPost, "/recordCallback", "", &CallbackForm{
-		CallID:      "callID",
-		EventType:   "recording",
-		State:       "complete",
-		RecordingID: "recordingID",
-	})
+	w := makeRequest(t, api, nil, db, http.MethodPost, "/recordCallback?callId=callID&eventType=recording&state=complete&recordingId=recordingID", "")
 	assert.Equal(t, http.StatusOK, w.Code)
 	api.AssertExpectations(t)
 	assert.NoError(t, db.First(user, user.ID).Error)

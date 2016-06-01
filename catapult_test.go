@@ -41,7 +41,7 @@ func TestGetApplicationIDWithNewApplication(t *testing.T) {
 		RequestHandler{
 			PathAndQuery:     "/v1/users/userID/applications",
 			Method:           http.MethodPost,
-			EstimatedContent: `{"name":"GolangVoiceReferenceApp on localhost","incomingCallUrl":"http://localhost/callCallback","callbackHttpMethod":"POST","autoAnswer":true}`,
+			EstimatedContent: `{"name":"GolangVoiceReferenceApp on localhost","incomingCallUrl":"http://localhost/callCallback","callbackHttpMethod":"GET","autoAnswer":true}`,
 			HeadersToSend:    map[string]string{"Location": "/v1/users/userID/applications/123"},
 		},
 	})
