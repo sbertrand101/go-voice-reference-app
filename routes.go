@@ -176,7 +176,7 @@ func getRoutes(router *gin.Engine, db *gorm.DB, newVoiceMessageEvent *pubsub.Pub
 			}
 			break
 		case "timeout":
-			// we can't use BXM here because it is called for another call
+			// we can't use BXM here because it is called for another (transfered) call
 			debugf("Moving to voice mail\n")
 			user = &User{}
 			tag := form.Get("tag")
@@ -185,6 +185,7 @@ func getRoutes(router *gin.Engine, db *gorm.DB, newVoiceMessageEvent *pubsub.Pub
 			if db.First(user, values[0]).RecordNotFound() {
 				return
 			}
+			timerAPI.Sleep(2000 * time.Millisecond)
 			if user.GreetingURL == "" {
 				api.SpeakSentenceToCall(originalCallID, "Hello. Please leave a message after beep.")
 			} else {
@@ -192,7 +193,7 @@ func getRoutes(router *gin.Engine, db *gorm.DB, newVoiceMessageEvent *pubsub.Pub
 			}
 			timerAPI.Sleep(5 * time.Second)
 			api.PlayAudioToCall(originalCallID, beepURL)
-			timerAPI.Sleep(3 * time.Second)
+			timerAPI.Sleep(time.Second)
 			api.UpdateCall(originalCallID, &bandwidth.UpdateCallData{RecordingEnabled: true})
 			break
 		case "hangup":
