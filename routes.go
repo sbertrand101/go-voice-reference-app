@@ -2,17 +2,21 @@ package main
 
 import (
 	"fmt"
+	"io"
 	"strconv"
 	"time"
 
 	"errors"
 	"net/http"
 
+	"strings"
+
 	"github.com/appleboy/gin-jwt"
 	"github.com/bandwidthcom/go-bandwidth"
+	j "github.com/dgrijalva/jwt-go"
 	"github.com/gin-gonic/gin"
 	"github.com/jinzhu/gorm"
-	"strings"
+	"github.com/tuxychandru/pubsub"
 )
 
 // RegisterForm is used on used registering
@@ -25,14 +29,22 @@ type RegisterForm struct {
 
 // CallbackForm is used for call callbacks
 type CallbackForm struct {
-	From      string `json:"from"`
-	To        string `json:"to"`
-	EventType string `json:"eventType"`
-	CallID    string `json:"callId"`
-	Tag       string `json:"tag"`
+	From        string `json:"from"`
+	To          string `json:"to"`
+	State       string `json:"state"`
+	EventType   string `json:"eventType"`
+	CallID      string `json:"callId"`
+	Tag         string `json:"tag"`
+	RecordingID string `json:"recordingId"`
+	Digits      string `json:"digits"`
 }
 
-func getRoutes(router *gin.Engine, db *gorm.DB) error {
+const beepURL = "https://s3.amazonaws.com/bwdemos/beep.mp3"
+
+func getRoutes(router *gin.Engine, db *gorm.DB, newVoiceMessageEvent *pubsub.PubSub) error {
+	if newVoiceMessageEvent == nil {
+		newVoiceMessageEvent = pubsub.New(1)
+	}
 
 	authMiddleware := &jwt.GinJWTMiddleware{
 		Realm:      "Bandwidth",
@@ -137,6 +149,7 @@ func getRoutes(router *gin.Engine, db *gorm.DB) error {
 	router.POST("/callCallback", func(c *gin.Context) {
 		form := &CallbackForm{}
 		api := c.MustGet("catapultAPI").(catapultAPIInterface)
+		timerAPI := c.MustGet("timerAPI").(timerInterface)
 		err := c.Bind(form)
 		debugf("Catapult Event: %+v\n", *form)
 		if err != nil {
@@ -146,8 +159,14 @@ func getRoutes(router *gin.Engine, db *gorm.DB) error {
 		user := &User{}
 		if !db.First(user, "sip_uri = ? OR phone_number = ?", form.From, form.To).RecordNotFound() {
 			if form.EventType == "answer" {
+				db.Create(&ActiveCall{
+					CallID: form.CallID,
+					UserID: user.ID,
+					From:   form.From,
+					To:     form.To,
+				})
 				if form.To == user.PhoneNumber {
-					debugf("Transfering incoming call  to  %q\n", user.SIPURI)
+					debugf("Transfering incoming call to %q\n", user.SIPURI)
 					callerID := form.From
 					anotherUser := &User{}
 					if strings.Index(callerID, "sip:") == 0 && !db.First(anotherUser, "sip_uri = ?", callerID).RecordNotFound() {
@@ -155,11 +174,24 @@ func getRoutes(router *gin.Engine, db *gorm.DB) error {
 						callerID = anotherUser.PhoneNumber
 					}
 					debugf("Using caller id %q\n", callerID)
-					api.UpdateCall(form.CallID, &bandwidth.UpdateCallData{
+					transferedCallID, _ := api.UpdateCall(form.CallID, &bandwidth.UpdateCallData{
 						State:            "transferring",
 						TransferTo:       user.SIPURI,
 						TransferCallerID: callerID,
+						CallbackURL:      fmt.Sprintf("http://%s/transferCallback", c.Request.Host), // to handle redirection to voice mail
 					})
+					go func() {
+						debugf("Waiting for answer call %s\n", transferedCallID)
+						timerAPI.Sleep(15 * time.Second)
+						call, _ := api.GetCall(transferedCallID)
+						if call.State == "started" {
+							// move to voice mail
+							debugf("Moving call to voice mail\n")
+							api.UpdateCall(transferedCallID, &bandwidth.UpdateCallData{
+								State: "active",
+							})
+						}
+					}()
 					return
 				}
 				if form.From == user.SIPURI {
@@ -176,9 +208,313 @@ func getRoutes(router *gin.Engine, db *gorm.DB) error {
 		c.String(http.StatusOK, "")
 	})
 
-	router.StaticFile("/", "./public/index.html")
+	router.POST("/transferCallback", func(c *gin.Context) {
+		api := c.MustGet("catapultAPI").(catapultAPIInterface)
+		form := &CallbackForm{}
+		err := c.Bind(form)
+		if err != nil {
+			setError(c, http.StatusBadRequest, err)
+			return
+		}
+		debugf("Catapult Event for transfered call: %+v\n", *form)
+		handleVoiceMailEvent(form, db, api, newVoiceMessageEvent)
+		c.String(http.StatusOK, "")
+	})
 
+	router.POST("/recordGreeting", authMiddleware.MiddlewareFunc(), func(c *gin.Context) {
+		api := c.MustGet("catapultAPI").(catapultAPIInterface)
+		user := c.MustGet("user").(*User)
+		callID, err := api.CreateCall(&bandwidth.CreateCallData{
+			From:        user.PhoneNumber,
+			To:          user.SIPURI,
+			CallbackURL: fmt.Sprintf("http://%s/recordCallback", c.Request.Host),
+		})
+		if err != nil {
+			setError(c, http.StatusBadGateway, err)
+			return
+		}
+		db.Create(&ActiveCall{
+			UserID: user.ID,
+			CallID: callID,
+			From:   user.PhoneNumber,
+			To:     user.SIPURI,
+		})
+	})
+
+	router.POST("/recordCallback", func(c *gin.Context) {
+		api := c.MustGet("catapultAPI").(catapultAPIInterface)
+		timerAPI := c.MustGet("timerAPI").(timerInterface)
+		form := &CallbackForm{}
+		err := c.Bind(form)
+		if err != nil {
+			setError(c, http.StatusBadRequest, err)
+			return
+		}
+		debugf("Catapult Event for greeting record: %+v\n", *form)
+		mainMenu := func() {
+			debugf("Main menu of greating recording\n")
+			id, err := api.CreateGather(form.CallID, &bandwidth.CreateGatherData{
+				MaxDigits:         1,
+				InterDigitTimeout: 30,
+				Prompt: &bandwidth.GatherPromptData{
+					Gender:   "female",
+					Voice:    "julie",
+					Sentence: "Press 1 to listen to your current greeting. Press 2 to record new greeting. Press 3 to set greeting to default.",
+				},
+				Tag: "Menu",
+			})
+			debugf("CreateGather result %v\n", []interface{}{id, err})
+		}
+		if form.EventType == "gather" && form.State == "completed" && form.Tag == "Record" {
+			debugf("Stoping recording of call %s\n", form.CallID)
+			api.UpdateCall(form.CallID, &bandwidth.UpdateCallData{
+				RecordingEnabled: false,
+			})
+			timerAPI.Sleep(time.Second)
+			api.SpeakSentenceToCall(form.CallID, "Your greeting has been changed.")
+			timerAPI.Sleep(time.Second)
+			mainMenu()
+			c.String(http.StatusOK, "")
+			return
+		}
+		user, err := getUserForCall(form, db)
+		if err != nil {
+			debugf("Error on getting user: %s\n", err.Error())
+			return
+		}
+		switch form.EventType {
+		case "answer":
+			mainMenu()
+			break
+		case "gather":
+			{
+				if form.State == "completed" {
+					switch form.Digits {
+					case "1":
+						debugf("Play greeting\n")
+						playGreeting(form.CallID, user, api)
+						timerAPI.Sleep(time.Second)
+						mainMenu()
+						break
+					case "2":
+						debugf("Record greeting\n")
+						api.SpeakSentenceToCall(form.CallID, "Say your greeting after beep. Press any key to complete recording.")
+						timerAPI.Sleep(5 * time.Second)
+						api.CreateGather(form.CallID, &bandwidth.CreateGatherData{
+							MaxDigits:         1,
+							InterDigitTimeout: 30,
+							Prompt:            &bandwidth.GatherPromptData{FileURL: beepURL},
+							Tag:               "Record",
+						})
+						timerAPI.Sleep(time.Second)
+						api.UpdateCall(form.CallID, &bandwidth.UpdateCallData{
+							RecordingEnabled: true,
+						})
+						break
+					case "3":
+						debugf("Reset greeting\n")
+						user.GreetingURL = ""
+						err := db.Save(user).Error
+						if err != nil {
+							debugf("Error on saving user's data %s\n", err.Error())
+							break
+						}
+						api.SpeakSentenceToCall(form.CallID, "Your greeting has been set to default.")
+						timerAPI.Sleep(time.Second)
+						mainMenu()
+						break
+					}
+
+				}
+				break
+			}
+		case "recording":
+			if form.State == "complete" {
+				recording, err := api.GetRecording(form.RecordingID)
+				if err != nil {
+					debugf("Error getting recording data: %s\n", err.Error())
+					break
+				}
+				user.GreetingURL = recording.Media
+				err = db.Save(user).Error
+				if err != nil {
+					debugf("Error on saving user's data %s\n", err.Error())
+					break
+				}
+				call, err := api.GetCall(form.CallID)
+				if err != nil {
+					debugf("Error getting call data: %s\n", err.Error())
+					break
+				}
+				if call.State == "active" {
+					api.SpeakSentenceToCall(form.CallID, "Your greeting has been saved.")
+					mainMenu()
+				}
+			}
+			break
+		}
+		c.String(http.StatusOK, "")
+	})
+
+	router.GET("/voiceMessages", authMiddleware.MiddlewareFunc(), func(c *gin.Context) {
+		user := c.MustGet("user").(*User)
+		list := []VoiceMailMessage{}
+		err := db.Order("start_time desc").Model(user).Related(&list).Error
+		if err != nil {
+			setError(c, http.StatusBadGateway, err, "Error on getting voice messages")
+			return
+		}
+		result := make([]interface{}, len(list))
+		for i, m := range list {
+			result[i] = m.ToJSONObject()
+		}
+		c.JSON(http.StatusOK, result)
+	})
+
+	router.GET("/voiceMessages/:id/media", authMiddleware.MiddlewareFunc(), func(c *gin.Context) {
+		api := c.MustGet("catapultAPI").(catapultAPIInterface)
+		user := c.MustGet("user").(*User)
+		message := &VoiceMailMessage{}
+		err := db.Where("user_id = ? and id = ?", user.ID, c.Param("id")).First(message).Error
+		if err != nil {
+			setError(c, http.StatusBadGateway, err, "Error on getting voice message data")
+			return
+		}
+		parts := strings.Split(message.MediaURL, "/")
+		reader, contentType, err := api.DownloadMediaFile(parts[len(parts)-1])
+		if err != nil {
+			setError(c, http.StatusBadGateway, err, "Error on downloading media file")
+			return
+		}
+		defer reader.Close()
+		c.Header("Content-Type", contentType)
+		length, _ := io.Copy(c.Writer, reader)
+		c.Header("Content-Length", strconv.FormatInt(length, 10))
+	})
+
+	router.DELETE("/voiceMessages/:id", authMiddleware.MiddlewareFunc(), func(c *gin.Context) {
+		user := c.MustGet("user").(*User)
+		err := db.Where("user_id = ? and id = ?", user.ID, c.Param("id")).Delete(VoiceMailMessage{}).Error
+		if err != nil {
+			setError(c, http.StatusBadGateway, err, "Error on removing a voice message")
+			return
+		}
+		c.Status(http.StatusOK)
+	})
+
+	router.GET("/voiceMessagesStream", func(c *gin.Context) {
+
+		tokenString := c.Query("token")
+		token, err := j.Parse(tokenString, func(token *j.Token) (interface{}, error) {
+			if j.GetSigningMethod("HS256") != token.Method {
+				return nil, errors.New("Invalid signing algorithm")
+			}
+			return authMiddleware.Key, nil
+		})
+		if err != nil {
+			setError(c, http.StatusBadRequest, err, "Error on validating JWT token")
+			return
+		}
+		user := &User{}
+		userID := token.Claims["id"].(string)
+		err = db.First(user, userID).Error
+		if err != nil {
+			setError(c, http.StatusBadGateway, err, "Error on getting user's data")
+			return
+		}
+		channel := newVoiceMessageEvent.Sub(userID)
+		defer newVoiceMessageEvent.Unsub(channel)
+		debugf("Started streaming of new voice messages\n")
+		c.Stream(func(w io.Writer) bool {
+			return streamNewVoceMailMessage(c, channel)
+		})
+	})
+
+	router.StaticFile("/", "./public/index.html")
 	return nil
+}
+
+type sseEmiter interface {
+	SSEvent(name string, message interface{})
+}
+
+func streamNewVoceMailMessage(c sseEmiter, channel chan interface{}) bool {
+	message := <-channel
+	json := message.(*VoiceMailMessage).ToJSONObject()
+	debugf("Received new message %+v\n", json)
+	c.SSEvent("message", json)
+	return true
+}
+
+func handleVoiceMailEvent(form *CallbackForm, db *gorm.DB, api catapultAPIInterface, newVoiceMessageEvent *pubsub.PubSub) {
+	debugf("Handle voice mail event\n")
+	var user *User
+	var err error
+	if form.EventType == "answer" {
+		user = &User{}
+		err = db.First(user, "phone_number = ?", form.To).Error
+	} else {
+		user, err = getUserForCall(form, db)
+	}
+	if err != nil {
+		debugf("Error on getting user: %s\n", err.Error())
+		return
+	}
+	switch form.EventType {
+	case "answer":
+		db.Create(&ActiveCall{
+			CallID: form.CallID,
+			UserID: user.ID,
+			From:   form.From,
+			To:     form.To,
+		})
+		playGreeting(form.CallID, user, api)
+		api.PlayAudioToCall(form.CallID, beepURL)
+		api.UpdateCall(form.CallID, &bandwidth.UpdateCallData{RecordingEnabled: true})
+		break
+	case "recording":
+		if form.State == "complete" {
+			debugf("Recording %s has been completed.\n", form.RecordingID)
+			recording, _ := api.GetRecording(form.RecordingID)
+			call, _ := api.GetCall(form.CallID)
+			message := &VoiceMailMessage{
+				MediaURL:  recording.Media,
+				StartTime: parseTime(recording.StartTime),
+				EndTime:   parseTime(recording.EndTime),
+				UserID:    user.ID,
+				From:      call.From,
+			}
+			err := db.Create(message).Error
+			if err != nil {
+				debugf("Error on on saving voice mail message: %s\n", err.Error())
+				return
+			}
+
+			// send notification about new voice mail message
+			if newVoiceMessageEvent != nil {
+				newVoiceMessageEvent.Pub(message, strconv.FormatUint(uint64(user.ID), 10))
+			}
+		}
+	}
+}
+
+func getUserForCall(form *CallbackForm, db *gorm.DB) (*User, error) {
+	call := &ActiveCall{}
+	user := &User{}
+	err := db.First(&call, "call_id=?", form.CallID).Error
+	if err != nil {
+		return nil, err
+	}
+	err = db.First(user, call.UserID).Error
+	return user, err
+}
+
+func playGreeting(callID string, user *User, api catapultAPIInterface) {
+	if user.GreetingURL == "" {
+		api.SpeakSentenceToCall(callID, fmt.Sprintf("Hello. You have called to %s. Please leave a message after beep.", user.PhoneNumber))
+	} else {
+		api.PlayAudioToCall(callID, user.GreetingURL)
+	}
 }
 
 func setErrorMessage(c *gin.Context, code int, message string) {
@@ -197,6 +533,11 @@ func setError(c *gin.Context, code int, err error, message ...string) {
 		errorMessage = err.Error()
 	}
 	setErrorMessage(c, code, errorMessage)
+}
+
+func parseTime(isoTime string) time.Time {
+	time, _ := time.Parse(time.RFC3339Nano, isoTime)
+	return time
 }
 
 func debugf(format string, a ...interface{}) {

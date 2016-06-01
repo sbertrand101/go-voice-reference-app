@@ -5,9 +5,11 @@ import (
 	"os"
 	"testing"
 
+	"io/ioutil"
+
+	"github.com/bandwidthcom/go-bandwidth"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
-	"github.com/bandwidthcom/go-bandwidth"
 )
 
 func TestNewCatapultApi(t *testing.T) {
@@ -98,7 +100,7 @@ func TestGetDomainWithNewDomain(t *testing.T) {
 	domainID = ""
 	server, api := startMockCatapultServer(t, []RequestHandler{
 		RequestHandler{
-			PathAndQuery:  "/v1/users/userID/domains",
+			PathAndQuery:  "/v1/users/userID/domains?size=100",
 			Method:        http.MethodGet,
 			ContentToSend: `[]`,
 		},
@@ -121,7 +123,7 @@ func TestGetDomainWithExistingDomain(t *testing.T) {
 	domainID = ""
 	server, api := startMockCatapultServer(t, []RequestHandler{
 		RequestHandler{
-			PathAndQuery:  "/v1/users/userID/domains",
+			PathAndQuery:  "/v1/users/userID/domains?size=100",
 			Method:        http.MethodGet,
 			ContentToSend: `[{"name": "domain", "id": "0123", "description": "GolangVoiceReferenceApp's domain"}]`,
 		},
@@ -136,7 +138,7 @@ func TestGetDomainRepeating(t *testing.T) {
 	domainID = ""
 	server, api := startMockCatapultServer(t, []RequestHandler{
 		RequestHandler{
-			PathAndQuery:  "/v1/users/userID/domains",
+			PathAndQuery:  "/v1/users/userID/domains?size=100",
 			Method:        http.MethodGet,
 			ContentToSend: `[{"name": "domain1", "id": "1234", "description": "GolangVoiceReferenceApp's domain"}]`,
 		},
@@ -155,7 +157,7 @@ func TestGetDomainFail(t *testing.T) {
 	domainID = ""
 	server, api := startMockCatapultServer(t, []RequestHandler{
 		RequestHandler{
-			PathAndQuery:     "/v1/users/userID/domains",
+			PathAndQuery:     "/v1/users/userID/domains?size=100",
 			Method:           http.MethodGet,
 			StatusCodeToSend: http.StatusBadRequest,
 		},
@@ -349,29 +351,233 @@ func TestCreateSIPAuthTokenFail2(t *testing.T) {
 func TestUpdateCall(t *testing.T) {
 	server, api := startMockCatapultServer(t, []RequestHandler{
 		RequestHandler{
-			PathAndQuery:  "/v1/users/userID/calls/123",
-			Method:        http.MethodPost,
+			PathAndQuery:     "/v1/users/userID/calls/123",
+			Method:           http.MethodPost,
 			EstimatedContent: `{"state":"transfering"}`,
+			HeadersToSend:    map[string]string{"Location": "/v1/users/userID/calls/567"},
 		},
 	})
 	defer server.Close()
-	api.UpdateCall("123", &bandwidth.UpdateCallData{
+	id, _ := api.UpdateCall("123", &bandwidth.UpdateCallData{
 		State: "transfering",
 	})
+	assert.Equal(t, "567", id)
 }
 
 func TestUpdateCallFail(t *testing.T) {
 	server, api := startMockCatapultServer(t, []RequestHandler{
 		RequestHandler{
-			PathAndQuery:  "/v1/users/userID/calls/123",
-			Method:        http.MethodPost,
+			PathAndQuery:     "/v1/users/userID/calls/123",
+			Method:           http.MethodPost,
 			StatusCodeToSend: http.StatusBadRequest,
 		},
 	})
 	defer server.Close()
-	err := api.UpdateCall("123", &bandwidth.UpdateCallData{
+	_, err := api.UpdateCall("123", &bandwidth.UpdateCallData{
 		State: "transfering",
 	})
+	assert.Error(t, err)
+}
+
+func TestGetCall(t *testing.T) {
+	server, api := startMockCatapultServer(t, []RequestHandler{
+		RequestHandler{
+			PathAndQuery:  "/v1/users/userID/calls/123",
+			Method:        http.MethodGet,
+			ContentToSend: `{"id": "123", "state":"transfering"}`,
+		},
+	})
+	defer server.Close()
+	call, _ := api.GetCall("123")
+	assert.Equal(t, "123", call.ID)
+}
+
+func TestGetCallFail(t *testing.T) {
+	server, api := startMockCatapultServer(t, []RequestHandler{
+		RequestHandler{
+			PathAndQuery:     "/v1/users/userID/calls/123",
+			Method:           http.MethodGet,
+			StatusCodeToSend: http.StatusBadRequest,
+		},
+	})
+	defer server.Close()
+	_, err := api.GetCall("123")
+	assert.Error(t, err)
+}
+
+func TestPlayAudioToCall(t *testing.T) {
+	server, api := startMockCatapultServer(t, []RequestHandler{
+		RequestHandler{
+			PathAndQuery:     "/v1/users/userID/calls/123/audio",
+			Method:           http.MethodPost,
+			EstimatedContent: `{"fileUrl":"url"}`,
+		},
+	})
+	defer server.Close()
+	err := api.PlayAudioToCall("123", "url")
+	assert.NoError(t, err)
+}
+
+func TestSpeakPlayAudioFail(t *testing.T) {
+	server, api := startMockCatapultServer(t, []RequestHandler{
+		RequestHandler{
+			PathAndQuery:     "/v1/users/userID/calls/123/audio",
+			Method:           http.MethodPost,
+			StatusCodeToSend: http.StatusBadRequest,
+		},
+	})
+	defer server.Close()
+	err := api.PlayAudioToCall("123", "url")
+	assert.Error(t, err)
+}
+
+func TestSpeakSentenceToCall(t *testing.T) {
+	server, api := startMockCatapultServer(t, []RequestHandler{
+		RequestHandler{
+			PathAndQuery:     "/v1/users/userID/calls/123/audio",
+			Method:           http.MethodPost,
+			EstimatedContent: `{"sentence":"text","gender":"female","locale":"en_US","voice":"julie"}`,
+		},
+	})
+	defer server.Close()
+	err := api.SpeakSentenceToCall("123", "text")
+	assert.NoError(t, err)
+}
+
+func TestSpeakSentenceToCallFail(t *testing.T) {
+	server, api := startMockCatapultServer(t, []RequestHandler{
+		RequestHandler{
+			PathAndQuery:     "/v1/users/userID/calls/123/audio",
+			Method:           http.MethodPost,
+			StatusCodeToSend: http.StatusBadRequest,
+		},
+	})
+	defer server.Close()
+	err := api.SpeakSentenceToCall("123", "test")
+	assert.Error(t, err)
+}
+
+func TestCreateGather(t *testing.T) {
+	server, api := startMockCatapultServer(t, []RequestHandler{
+		RequestHandler{
+			PathAndQuery:     "/v1/users/userID/calls/123/gather",
+			Method:           http.MethodPost,
+			EstimatedContent: `{"maxDigits":"1"}`,
+			HeadersToSend:    map[string]string{"Location": "/v1/users/userID/calls/123/gather/456"},
+		},
+	})
+	defer server.Close()
+	id, err := api.CreateGather("123", &bandwidth.CreateGatherData{
+		MaxDigits: 1,
+	})
+	assert.NoError(t, err)
+	assert.Equal(t, "456", id)
+}
+
+func TestCreateGatherFail(t *testing.T) {
+	server, api := startMockCatapultServer(t, []RequestHandler{
+		RequestHandler{
+			PathAndQuery:     "/v1/users/userID/calls/123/gather",
+			Method:           http.MethodPost,
+			StatusCodeToSend: http.StatusBadRequest,
+		},
+	})
+	defer server.Close()
+	_, err := api.CreateGather("123", &bandwidth.CreateGatherData{
+		MaxDigits: 1,
+	})
+	assert.Error(t, err)
+}
+
+func TestGetRecording(t *testing.T) {
+	server, api := startMockCatapultServer(t, []RequestHandler{
+		RequestHandler{
+			PathAndQuery:  "/v1/users/userID/recordings/456",
+			Method:        http.MethodGet,
+			ContentToSend: `{"id": "456"}`,
+		},
+	})
+	defer server.Close()
+	r, err := api.GetRecording("456")
+	assert.NoError(t, err)
+	assert.Equal(t, "456", r.ID)
+}
+
+func TestGetRecordingFail(t *testing.T) {
+	server, api := startMockCatapultServer(t, []RequestHandler{
+		RequestHandler{
+			PathAndQuery:     "/v1/users/userID/recordings/456",
+			Method:           http.MethodGet,
+			StatusCodeToSend: http.StatusBadRequest,
+		},
+	})
+	defer server.Close()
+	_, err := api.GetRecording("456")
+	assert.Error(t, err)
+}
+
+func TestCreateCall(t *testing.T) {
+	server, api := startMockCatapultServer(t, []RequestHandler{
+		RequestHandler{
+			PathAndQuery:     "/v1/users/userID/calls",
+			Method:           http.MethodPost,
+			EstimatedContent: `{"from":"111","to":"222"}`,
+			HeadersToSend:    map[string]string{"Location": "/v1/users/userID/calls/123"},
+		},
+	})
+	defer server.Close()
+	id, err := api.CreateCall(&bandwidth.CreateCallData{
+		From: "111",
+		To:   "222",
+	})
+	assert.NoError(t, err)
+	assert.Equal(t, "123", id)
+}
+
+func TestCreateCallFail(t *testing.T) {
+	server, api := startMockCatapultServer(t, []RequestHandler{
+		RequestHandler{
+			PathAndQuery:     "/v1/users/userID/calls",
+			Method:           http.MethodPost,
+			StatusCodeToSend: http.StatusBadRequest,
+		},
+	})
+	defer server.Close()
+	_, err := api.CreateCall(&bandwidth.CreateCallData{
+		From: "111",
+		To:   "222",
+	})
+	assert.Error(t, err)
+}
+
+func TestDownloadMediaFile(t *testing.T) {
+	server, api := startMockCatapultServer(t, []RequestHandler{
+		RequestHandler{
+			PathAndQuery:  "/v1/users/userID/media/test",
+			Method:        http.MethodGet,
+			ContentToSend: `123`,
+			HeadersToSend: map[string]string{"Content-Type": "text/plain"},
+		},
+	})
+	defer server.Close()
+	r, contentType, err := api.DownloadMediaFile("test")
+	defer r.Close()
+	assert.NoError(t, err)
+	assert.Equal(t, "text/plain", contentType)
+	b, _ := ioutil.ReadAll(r)
+	assert.Equal(t, "123\n", string(b))
+}
+
+func TestDownloadMediaFileFail(t *testing.T) {
+	server, api := startMockCatapultServer(t, []RequestHandler{
+		RequestHandler{
+			PathAndQuery:     "/v1/users/userID/media/test",
+			Method:           http.MethodGet,
+			StatusCodeToSend: http.StatusNotFound,
+		},
+	})
+	defer server.Close()
+	_, _, err := api.DownloadMediaFile("test")
 	assert.Error(t, err)
 }
 

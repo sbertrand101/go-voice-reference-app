@@ -7,16 +7,17 @@ import (
 	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
-	"github.com/bandwidthcom/go-bandwidth"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
-	"github.com/stretchr/testify/mock"
+	"os"
 	"testing"
+	"time"
+
+	"github.com/bandwidthcom/go-bandwidth"
 	"github.com/gin-gonic/gin"
 	"github.com/jinzhu/gorm"
-	"os"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
+	"github.com/stretchr/testify/require"
 )
-
 
 func createFakeResponse(body string, statusCode int) *http.Response {
 	return &http.Response{StatusCode: statusCode,
@@ -78,7 +79,7 @@ func startMockCatapultServer(t *testing.T, handlers []RequestHandler) (*httptest
 	return mockServer, &catapultAPI{client: client, context: createFakeGinContext()}
 }
 
-func createFakeGinContext() *gin.Context{
+func createFakeGinContext() *gin.Context {
 	request, _ := http.NewRequest("GET", "/test", bytes.NewReader([]byte{}))
 	context := &gin.Context{Request: request}
 	context.Request.Header.Set("Host", "localhost")
@@ -115,8 +116,8 @@ func openDBConnection(t *testing.T) *gorm.DB {
 	return db
 }
 
-type fakeCatapultAPI struct{
-  mock.Mock
+type fakeCatapultAPI struct {
+	mock.Mock
 }
 
 func (m *fakeCatapultAPI) GetApplicationID() (string, error) {
@@ -144,7 +145,58 @@ func (m *fakeCatapultAPI) CreateSIPAuthToken(endpointID string) (*bandwidth.Doma
 	return args.Get(0).(*bandwidth.DomainEndpointToken), args.Error(1)
 }
 
-func (m *fakeCatapultAPI) UpdateCall(callID string, data *bandwidth.UpdateCallData) error {
-	m.Called(callID, data)
-	return nil
+func (m *fakeCatapultAPI) UpdateCall(callID string, data *bandwidth.UpdateCallData) (string, error) {
+	args := m.Called(callID, data)
+	return args.String(0), args.Error(1)
+}
+
+func (m *fakeCatapultAPI) GetCall(callID string) (*bandwidth.Call, error) {
+	args := m.Called(callID)
+	return args.Get(0).(*bandwidth.Call), args.Error(1)
+}
+
+func (m *fakeCatapultAPI) PlayAudioToCall(callID string, url string) error {
+	args := m.Called(callID, url)
+	return args.Error(0)
+}
+
+func (m *fakeCatapultAPI) SpeakSentenceToCall(callID string, text string) error {
+	args := m.Called(callID, text)
+	return args.Error(0)
+}
+
+func (m *fakeCatapultAPI) CreateGather(callID string, data *bandwidth.CreateGatherData) (string, error) {
+	args := m.Called(callID, data)
+	return args.String(0), args.Error(1)
+}
+
+func (m *fakeCatapultAPI) GetRecording(recordingID string) (*bandwidth.Recording, error) {
+	args := m.Called(recordingID)
+	return args.Get(0).(*bandwidth.Recording), args.Error(1)
+}
+
+func (m *fakeCatapultAPI) CreateCall(data *bandwidth.CreateCallData) (string, error) {
+	args := m.Called(data)
+	return args.String(0), args.Error(1)
+}
+
+func (m *fakeCatapultAPI) DownloadMediaFile(name string) (io.ReadCloser, string, error) {
+	args := m.Called(name)
+	return args.Get(0).(io.ReadCloser), args.String(1), args.Error(2)
+}
+
+type fakeTimerAPI struct {
+	mock.Mock
+}
+
+func (m *fakeTimerAPI) Sleep(d time.Duration) {
+	m.Called(d)
+}
+
+type fakeSSEEmiter struct {
+	mock.Mock
+}
+
+func (m *fakeSSEEmiter) SSEvent(name string, message interface{}) {
+	m.Called(name, message)
 }

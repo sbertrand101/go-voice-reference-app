@@ -9,8 +9,8 @@ import (
 	"io/ioutil"
 	"net/http"
 	"net/url"
-	"strings"
 	"reflect"
+	"strings"
 )
 
 // Client is main API object
@@ -115,7 +115,7 @@ func (c *Client) makeRequest(method, path string, data ...interface{}) (interfac
 		treatDataAsQuery = data[2].(bool)
 	}
 	if len(data) > 1 {
-		if method == "GET" || treatDataAsQuery{
+		if method == "GET" || treatDataAsQuery {
 			var item map[string]string
 			if data[1] == nil {
 				item = make(map[string]string)
@@ -127,16 +127,16 @@ func (c *Client) makeRequest(method, path string, data ...interface{}) (interfac
 					structType := reflect.TypeOf(data[1]).Elem()
 					structValue := reflect.ValueOf(data[1])
 					if !structValue.IsNil() {
-						structValue = structValue.Elem();
+						structValue = structValue.Elem()
 						fieldCount := structType.NumField()
-						for i := 0; i < fieldCount; i++{
-							fieldName :=  structType.Field(i).Name
+						for i := 0; i < fieldCount; i++ {
+							fieldName := structType.Field(i).Name
 							fieldValue := structValue.Field(i).Interface()
 							if fieldValue == reflect.Zero(structType.Field(i).Type).Interface() {
 								//ignore fields with default values
 								continue
 							}
-							item[strings.Replace(strings.ToLower(string(fieldName[0])) + fieldName[1:], "ID", "Id", -1)] = fmt.Sprintf("%v", fieldValue)
+							item[strings.Replace(strings.ToLower(string(fieldName[0]))+fieldName[1:], "ID", "Id", -1)] = fmt.Sprintf("%v", fieldValue)
 						}
 					}
 				}
@@ -163,14 +163,17 @@ func (c *Client) makeRequest(method, path string, data ...interface{}) (interfac
 	return c.checkResponse(response, responseBody)
 }
 
-func getIDFromLocationHeader(headers http.Header) string{
+func getIDFromLocationHeader(headers http.Header) string {
 	return getIDFromLocation(headers.Get("Location"))
 }
 
-func getIDFromLocation(location string) string{
+func getIDFromLocation(location string) string {
 	list := strings.Split(location, "/")
 	l := len(list)
-	return list[l - 1]
+	if l == 0 {
+		return ""
+	}
+	return list[l-1]
 }
 
 type nopCloser struct {

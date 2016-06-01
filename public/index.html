@@ -122,6 +122,7 @@
 						<i class="fa fa-phone"></i>
 					</div>
 					<a id="sipDetailsLink" href="#">Show SIP account data</a>
+					<a id="voiceMailLink" href="#">Voice Mail Messages</a>
 					<div id="sipDetails" hidden>
 						<p>
 							<span class="title">User Name: </span>
@@ -136,6 +137,13 @@
 							<span id="sipPassword"></span>
 						</p>
 					</div>
+					<div id="voiceMailMessages" hidden>
+						<h3>Voice Mail Messages</h3>
+						<ul>
+						</ul>
+						<p id="noVoiceMailMessages" hidden>No messages</p>
+						<button class="change-greeting">Record Greeting</button>
+					</div>
 				</div>
 			</section>
 			<section id="connecting" class="centered" hidden>
@@ -144,6 +152,7 @@
 		</div>
 
 		<script src="//cdnjs.cloudflare.com/ajax/libs/jssip/1.0.0/jssip.min.js"></script>
+		<script src="//cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2014-11-29/FileSaver.min.js"></script>
 		<script src="/js/main.js"></script>
 	</body>
 </html>

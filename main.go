@@ -1,18 +1,20 @@
 package main
 
 import (
-	"github.com/gin-gonic/gin"
+	"fmt"
+	"os"
+
 	"github.com/gin-gonic/contrib/static"
+	"github.com/gin-gonic/gin"
 	"github.com/jinzhu/gorm"
 	_ "github.com/jinzhu/gorm/dialects/postgres"
-	"os"
-	"fmt"
 )
 
 func main() {
 	router := gin.Default()
 	router.NoRoute(static.ServeRoot("/", "./public")) //serve static files for other routes
-	router.Use(catapultMiddleware) // make CatapultAPI available for all routes
+	router.Use(catapultMiddleware)                    // make CatapultAPI available for all routes
+	router.Use(timerMiddleware)
 	connectionString := os.Getenv("DATABASE_URL")
 	if connectionString == "" {
 		// Docker's links support
@@ -32,7 +34,7 @@ func main() {
 	if err = AutoMigrate(db).Error; err != nil {
 		panic(fmt.Sprintf("Error on executing db migrations: %s", err.Error()))
 	}
-	if err = getRoutes(router, db); err != nil {
+	if err = getRoutes(router, db, nil); err != nil {
 		panic(fmt.Sprintf("Error on creating routes: %s", err.Error()))
 	}
 	router.Run()

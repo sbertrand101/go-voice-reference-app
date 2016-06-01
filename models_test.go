@@ -2,6 +2,8 @@ package main
 
 import (
 	"testing"
+	"time"
+
 	"github.com/stretchr/testify/assert"
 )
 
@@ -24,6 +26,18 @@ func TestUserComparePasswords(t *testing.T) {
 	assert.NoError(t, user.SetPassword("123456"))
 	assert.True(t, user.ComparePasswords("123456"))
 	assert.False(t, user.ComparePasswords("1234567"))
+}
+
+func TestVoiceMailMessageToJSONObject(t *testing.T) {
+	message := &VoiceMailMessage{
+		StartTime: time.Now(),
+		EndTime:   time.Now(),
+	}
+	message.ID = 1
+	result := message.ToJSONObject()
+	assert.NotEmpty(t, result["startTime"])
+	assert.NotEmpty(t, result["endTime"])
+	assert.NotEmpty(t, result["id"])
 }
 
 func TestAutoMigrate(t *testing.T) {
