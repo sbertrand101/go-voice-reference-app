@@ -581,6 +581,20 @@ func TestDownloadMediaFileFail(t *testing.T) {
 	assert.Error(t, err)
 }
 
+func TestGetCallRecordings(t *testing.T) {
+	applicationIDs = map[string]string{"localhost": ""}
+	server, api := startMockCatapultServer(t, []RequestHandler{
+		RequestHandler{
+			PathAndQuery:  "/v1/users/userID/calls/123/recordings",
+			Method:        http.MethodGet,
+			ContentToSend: `[]`,
+		},
+	})
+	defer server.Close()
+	list, _ := api.GetCallRecordings("123")
+	assert.Equal(t, 0, len(list))
+}
+
 func TestCatapultMiddleware(t *testing.T) {
 	os.Setenv("CATAPULT_USER_ID", "UserID")
 	os.Setenv("CATAPULT_API_TOKEN", "Token")
@@ -611,6 +625,38 @@ func TestRandomString(t *testing.T) {
 	assert.Equal(t, 10, len(randomString(10)))
 	assert.Equal(t, 16, len(randomString(16)))
 	assert.NotEqual(t, randomString(32), randomString(32))
+}
+
+func TestBuildBXML(t *testing.T) {
+	assert.Equal(t, "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<Response>\n\t<Test/>\n</Response>", buildBXML("<Test/>"))
+}
+
+func TestHangupBXML(t *testing.T) {
+	assert.Equal(t, "<Hangup/>", hangupBXML())
+}
+
+func TestPlayAudioBXML(t *testing.T) {
+	assert.Equal(t, "<PlayAudio>url</PlayAudio>", playAudioBXML("url"))
+}
+
+func TestTransferBXML(t *testing.T) {
+	assert.Equal(t, "<Transfer transferTo=\"to\" transferCallerId=\"id\"/>", transferBXML("to", "id", 0, "", ""))
+	assert.Equal(t, "<Transfer transferTo=\"to\" transferCallerId=\"id\" callTimeout=\"10\"/>", transferBXML("to", "id", 10, "", ""))
+	assert.Equal(t, "<Transfer transferTo=\"to\" transferCallerId=\"id\" callTimeout=\"10\" requestUrl=\"url\"/>", transferBXML("to", "id", 10, "url", ""))
+	assert.Equal(t, "<Transfer transferTo=\"to\" transferCallerId=\"id\" callTimeout=\"10\" requestUrl=\"url\" tag=\"tag\"/>", transferBXML("to", "id", 10, "url", "tag"))
+}
+
+func TestSpeakSentenceBXML(t *testing.T) {
+	assert.Equal(t, "<SpeakSentence locale=\"en_US\" gender=\"female\" voice=\"julie\">text</SpeakSentence>", speakSentenceBXML("text"))
+}
+
+func TestGatherBXML(t *testing.T) {
+	assert.Equal(t, "<Gather requestUrl=\"url\" maxDigits=\"1\" interDigitTimeout=\"30\"></Gather>", gatherBXML("url"))
+}
+
+func TestRecordBXML(t *testing.T) {
+	assert.Equal(t, "<Record requestUrl=\"url\" terminatingDigits=\"#\" maxDuration=\"3600\"/>", recordBXML("url"))
+	assert.Equal(t, "<Record requestUrl=\"url\" terminatingDigits=\"01\" maxDuration=\"3600\"/>", recordBXML("url", "01"))
 }
 
 var originalRandomString = randomString
