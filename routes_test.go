@@ -532,6 +532,29 @@ func TestRouteRecordCallbackGather1(t *testing.T) {
 	api.AssertExpectations(t)
 }
 
+func TestRouteRecordCallbackGather1WithDefautGreeting(t *testing.T) {
+	api := &fakeCatapultAPI{}
+	timer := &fakeTimerAPI{}
+	db := openDBConnection(t)
+	defer db.Close()
+	user := &User{
+		AreaCode:    "910",
+		SIPURI:      "sip:rtest10@test.com",
+		PhoneNumber: "+1334567810",
+		UserName:    "ruser10",
+	}
+	user.SetPassword("123456")
+	db.Save(user)
+	activeCall := &ActiveCall{
+		UserID: user.ID,
+		CallID: "callId",
+	}
+	db.Save(activeCall)
+	w := makeRequest(t, api, timer, db, http.MethodGet, "/recordCallback?callId=callId&eventType=gather&state=completed&digits=1", "")
+	assert.Equal(t, http.StatusOK, w.Code)
+	api.AssertExpectations(t)
+}
+
 func TestRouteRecordCallbackGather2(t *testing.T) {
 	api := &fakeCatapultAPI{}
 	timer := &fakeTimerAPI{}
