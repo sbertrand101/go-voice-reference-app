@@ -185,7 +185,7 @@ func getRoutes(router *gin.Engine, db *gorm.DB, newVoiceMessageEvent *pubsub.Pub
 			if db.First(user, values[0]).RecordNotFound() {
 				return
 			}
-			timerAPI.Sleep(2000 * time.Millisecond)
+			timerAPI.Sleep(2 * time.Second)
 			if user.GreetingURL == "" {
 				api.SpeakSentenceToCall(originalCallID, "Hello. Please leave a message after beep.")
 			} else {
@@ -208,7 +208,7 @@ func getRoutes(router *gin.Engine, db *gorm.DB, newVoiceMessageEvent *pubsub.Pub
 				debugf("Error on Getting call recordings: %s\n", err.Error())
 				break
 			}
-			if recordings != nil && len(recordings) > 0 {
+			if user != nil && recordings != nil && len(recordings) > 0 {
 				debugf("Saving recorded voice message to db\n")
 				recording := recordings[0]
 				message := &VoiceMailMessage{
@@ -232,11 +232,6 @@ func getRoutes(router *gin.Engine, db *gorm.DB, newVoiceMessageEvent *pubsub.Pub
 			break
 		}
 
-		c.String(http.StatusOK, "")
-	})
-
-	router.GET("/transferedCallCallback", func(c *gin.Context) {
-		debugf("Transfered catapult Event: %v\n", c.Request.URL.RawQuery)
 		c.String(http.StatusOK, "")
 	})
 
