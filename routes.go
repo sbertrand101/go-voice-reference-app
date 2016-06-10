@@ -215,6 +215,8 @@ func getRoutes(router *gin.Engine, db *gorm.DB, newVoiceMessageEvent *pubsub.Pub
 					timerAPI.Sleep(10 * time.Second)
 					call, _ := api.GetCall(anotherCallID)
 					if call.State == "started" {
+						err := api.PlayAudioToCall(callID, "", false, "")
+						debugf("Stop tones %v", err)
 						api.Hangup(anotherCallID)
 						// redirect to voice mail after some seconds of waiting
 						debugf("Moving to voice mail\n")
