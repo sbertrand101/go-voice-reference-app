@@ -69,6 +69,7 @@ type PlayAudioData struct {
 	Locale      string `json:"locale,omitempty"`
 	Voice       string `json:"voice,omitempty"`
 	LoopEnabled bool   `json:"loopEnabled,omitempty"`
+	Tag         string `json:"tag,omitempty"`
 }
 
 // PlayAudioToBridge plays an audio or speak a sentence in a bridge

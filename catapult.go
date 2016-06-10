@@ -32,13 +32,15 @@ type catapultAPIInterface interface {
 	CreateSIPAuthToken(endpointID string) (*bandwidth.DomainEndpointToken, error)
 	UpdateCall(callID string, data *bandwidth.UpdateCallData) (string, error)
 	GetCall(callID string) (*bandwidth.Call, error)
-	PlayAudioToCall(callID string, url string) error
-	SpeakSentenceToCall(callID string, text string) error
+	PlayAudioToCall(callID string, url string, loop bool, tag string) error
+	SpeakSentenceToCall(callID string, text string, tag string) error
 	CreateGather(callID string, data *bandwidth.CreateGatherData) (string, error)
 	GetRecording(recordingID string) (*bandwidth.Recording, error)
 	CreateCall(data *bandwidth.CreateCallData) (string, error)
 	DownloadMediaFile(name string) (io.ReadCloser, string, error)
 	GetCallRecordings(callID string) ([]*bandwidth.Recording, error)
+	CreateBridge(data *bandwidth.BridgeData) (string, error)
+	Hangup(callID string) error
 }
 
 func newCatapultAPI(context *gin.Context) (*catapultAPI, error) {
@@ -169,16 +171,21 @@ func (api *catapultAPI) GetCall(callID string) (*bandwidth.Call, error) {
 	return api.client.GetCall(callID)
 }
 
-func (api *catapultAPI) PlayAudioToCall(callID string, url string) error {
-	return api.client.PlayAudioToCall(callID, &bandwidth.PlayAudioData{FileURL: url})
+func (api *catapultAPI) PlayAudioToCall(callID string, url string, loop bool, tag string) error {
+	return api.client.PlayAudioToCall(callID, &bandwidth.PlayAudioData{
+		FileURL:     url,
+		LoopEnabled: loop,
+		Tag:         tag,
+	})
 }
 
-func (api *catapultAPI) SpeakSentenceToCall(callID string, text string) error {
+func (api *catapultAPI) SpeakSentenceToCall(callID string, text string, tag string) error {
 	return api.client.PlayAudioToCall(callID, &bandwidth.PlayAudioData{
 		Gender:   "female",
 		Locale:   "en_US",
 		Voice:    "julie",
 		Sentence: text,
+		Tag:      tag,
 	})
 }
 
@@ -198,8 +205,16 @@ func (api *catapultAPI) CreateCall(data *bandwidth.CreateCallData) (string, erro
 	return api.client.CreateCall(data)
 }
 
+func (api *catapultAPI) CreateBridge(data *bandwidth.BridgeData) (string, error) {
+	return api.client.CreateBridge(data)
+}
+
 func (api *catapultAPI) DownloadMediaFile(name string) (io.ReadCloser, string, error) {
 	return api.client.DownloadMediaFile(name)
+}
+
+func (api *catapultAPI) Hangup(callID string) error {
+	return api.client.HangUpCall(callID)
 }
 
 func buildBXML(items ...string) string {
