@@ -152,14 +152,14 @@ func getRoutes(router *gin.Engine, db *gorm.DB, newVoiceMessageEvent *pubsub.Pub
 			if len(values) == 3 && values[0] == "AnotherLeg" {
 				debugf("Another leg has answered\n")
 				api.StopPlayAudioToCall(values[1]) // stop tones
-				db.Create(&ActiveCall{
+				err := db.Create(&ActiveCall{
 					CallID:   callID,
 					BridgeID: values[2],
 					UserID:   0, // user is not required for bridged calls
 					From:     from,
 					To:       to,
-				})
-
+				}).Error
+				debugf("Error on adding active call %v\n", err)
 				c.String(http.StatusOK, "")
 				return
 			}
@@ -195,10 +195,12 @@ func getRoutes(router *gin.Engine, db *gorm.DB, newVoiceMessageEvent *pubsub.Pub
 
 				debugf("Calling to another leg %s\n", user.SIPURI)
 				anotherCallID, err := api.CreateCall(&bandwidth.CreateCallData{
-					BridgeID: bridgeID,
-					From:     callerID,
-					To:       user.SIPURI,
-					Tag:      fmt.Sprintf("AnotherLeg:%v:%v", callID, bridgeID),
+					BridgeID:           bridgeID,
+					From:               callerID,
+					To:                 user.SIPURI,
+					Tag:                fmt.Sprintf("AnotherLeg:%v:%v", callID, bridgeID),
+					CallbackHTTPMethod: "GET",
+					CallbackURL:        fmt.Sprintf("http://%s/callCallback", c.Request.Host),
 				})
 
 				if err != nil {
@@ -218,8 +220,8 @@ func getRoutes(router *gin.Engine, db *gorm.DB, newVoiceMessageEvent *pubsub.Pub
 						debugf("Moving to voice mail\n")
 						if user.GreetingURL == "" {
 							debugf("Play default greeting\n")
-							err = api.PlayAudioToCall(callID, beepURL, false, "Greeting")
-							// err = api.SpeakSentenceToCall(callID, "Hello. Please leave a message after beep.", "Greeting")
+							// err = api.PlayAudioToCall(callID, beepURL, false, "Greeting")
+							err = api.SpeakSentenceToCall(callID, "Hello. Please leave a message after beep.", "Greeting")
 						} else {
 							debugf("Play user's greeting\n")
 							err = api.PlayAudioToCall(callID, user.GreetingURL, false, "Greeting")
@@ -286,7 +288,12 @@ func getRoutes(router *gin.Engine, db *gorm.DB, newVoiceMessageEvent *pubsub.Pub
 				}
 			}
 			activeCalls := []ActiveCall{}
-			err = db.Find(&activeCalls, "bridge_id = ? AND call_id <> ?", call.BridgeID, callID).Error
+			activeCall := ActiveCall{}
+			debugf("Hangup %+v\n", *call)
+			if db.First(&activeCall, "call_id = ?", callID).RecordNotFound() {
+				break
+			}
+			err = db.Debug().Find(&activeCalls, "bridge_id = ? AND call_id <> ?", activeCall.BridgeID, callID).Error
 			if err != nil {
 				debugf("Error on getting bridged calls: %s\n", err.Error())
 				break
