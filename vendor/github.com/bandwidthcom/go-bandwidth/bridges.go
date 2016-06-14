@@ -63,8 +63,8 @@ func (api *Client) UpdateBridge(id string, changedData *BridgeData) error {
 
 // PlayAudioData struct
 type PlayAudioData struct {
-	FileURL     string `json:"fileUrl"`
-	Sentence    string `json:"sentence"`
+	FileURL     string `json:"fileUrl,omitempty"`
+	Sentence    string `json:"sentence,omitempty"`
 	Gender      string `json:"gender,omitempty"`
 	Locale      string `json:"locale,omitempty"`
 	Voice       string `json:"voice,omitempty"`

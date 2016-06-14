@@ -33,6 +33,7 @@ type catapultAPIInterface interface {
 	UpdateCall(callID string, data *bandwidth.UpdateCallData) (string, error)
 	GetCall(callID string) (*bandwidth.Call, error)
 	PlayAudioToCall(callID string, url string, loop bool, tag string) error
+	StopPlayAudioToCall(callID string) error
 	SpeakSentenceToCall(callID string, text string, tag string) error
 	CreateGather(callID string, data *bandwidth.CreateGatherData) (string, error)
 	GetRecording(recordingID string) (*bandwidth.Recording, error)
@@ -176,6 +177,12 @@ func (api *catapultAPI) PlayAudioToCall(callID string, url string, loop bool, ta
 		FileURL:     url,
 		LoopEnabled: loop,
 		Tag:         tag,
+	})
+}
+
+func (api *catapultAPI) StopPlayAudioToCall(callID string) error {
+	return api.client.PlayAudioToCallWithMap(callID, map[string]interface{}{
+		"fileUrl": "",
 	})
 }
 

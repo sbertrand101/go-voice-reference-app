@@ -76,6 +76,7 @@ type CreateCallData struct {
 	CallbackHTTPMethod   string            `json:"callbackHttpMethod,omitempty"`
 	FallbackURL          string            `json:"fallbackUrl,omitempty"`
 	CallbackTimeout      int               `json:"callbackTimeout,omitempty"`
+	CallTimeout          int               `json:"callTimeout,omitempty"`
 }
 
 // CreateCall creates an outbound phone call
@@ -103,6 +104,7 @@ type UpdateCallData struct {
 	TransferCallerID     string         `json:"transferCallerId,omitempty"`
 	TransferTo           string         `json:"transferTo,omitempty"`
 	RecordingEnabled     bool           `json:"recordingEnabled,string,omitempty"`
+	RecordingFileFormat  string         `json:"recordingFileFormat,omitempty"`
 	State                string         `json:"state,omitempty"`
 	TranscriptionEnabled bool           `json:"transcriptionEnabled,string,omitempty"`
 	CallbackURL          string         `json:"callbackUrl,omitempty"`
@@ -120,6 +122,13 @@ func (api *Client) UpdateCall(id string, changedData *UpdateCallData) (string, e
 // PlayAudioToCall plays an audio or speak a sentence in a call
 // It returns error object
 func (api *Client) PlayAudioToCall(id string, data *PlayAudioData) error {
+	_, _, err := api.makeRequest(http.MethodPost, fmt.Sprintf("%s/%s/%s", api.concatUserPath(callsPath), id, "audio"), nil, data)
+	return err
+}
+
+// PlayAudioToCallWithMap plays an audio or speak a sentence in a call
+// It returns error object
+func (api *Client) PlayAudioToCallWithMap(id string, data map[string]interface{}) error {
 	_, _, err := api.makeRequest(http.MethodPost, fmt.Sprintf("%s/%s/%s", api.concatUserPath(callsPath), id, "audio"), nil, data)
 	return err
 }

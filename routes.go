@@ -28,7 +28,7 @@ type RegisterForm struct {
 }
 
 const beepURL = "https://s3.amazonaws.com/bwdemos/beep.mp3"
-const tonesURL = "https://s3.amazonaws.com/bwdemos/beep.mp3"
+const tonesURL = "https://s3.amazonaws.com/bwdemos/media/ring.mp3"
 
 func getRoutes(router *gin.Engine, db *gorm.DB, newVoiceMessageEvent *pubsub.PubSub) error {
 	if newVoiceMessageEvent == nil {
@@ -151,7 +151,7 @@ func getRoutes(router *gin.Engine, db *gorm.DB, newVoiceMessageEvent *pubsub.Pub
 			values := strings.Split(tag, ":")
 			if len(values) == 3 && values[0] == "AnotherLeg" {
 				debugf("Another leg has answered\n")
-				api.PlayAudioToCall(values[1], "", false, "") // stop tones
+				api.StopPlayAudioToCall(values[1]) // stop tones
 				db.Create(&ActiveCall{
 					CallID:   callID,
 					BridgeID: values[2],
@@ -170,13 +170,9 @@ func getRoutes(router *gin.Engine, db *gorm.DB, newVoiceMessageEvent *pubsub.Pub
 			}
 			if to == user.PhoneNumber {
 				debugf("Bridging incoming call with %q\n", user.SIPURI)
-				callerID := from
-				anotherUser := &User{}
+				callerID := getCallerID(db, from)
 				api.PlayAudioToCall(callID, tonesURL, true, "")
-				if strings.Index(callerID, "sip:") == 0 && !db.First(anotherUser, "sip_uri = ?", callerID).RecordNotFound() {
-					// try to use phone number for caller id instead of sip uri
-					callerID = anotherUser.PhoneNumber
-				}
+
 				debugf("Using caller id %q\n", callerID)
 				bridgeID, err := api.CreateBridge(&bandwidth.BridgeData{
 					CallIDs:     []string{callID},
@@ -212,22 +208,26 @@ func getRoutes(router *gin.Engine, db *gorm.DB, newVoiceMessageEvent *pubsub.Pub
 				}
 
 				go func() {
-					timerAPI.Sleep(10 * time.Second)
+					timerAPI.Sleep(15 * time.Second)
 					call, _ := api.GetCall(anotherCallID)
+					debugf("Another call state %s\n", call.State)
 					if call.State == "started" {
-						err := api.PlayAudioToCall(callID, "", false, "")
-						debugf("Stop tones %v", err)
+						api.StopPlayAudioToCall(callID)
 						api.Hangup(anotherCallID)
 						// redirect to voice mail after some seconds of waiting
 						debugf("Moving to voice mail\n")
 						if user.GreetingURL == "" {
-							api.SpeakSentenceToCall(callID, "Hello. Please leave a message after beep.", "Greeting")
+							debugf("Play default greeting\n")
+							err = api.PlayAudioToCall(callID, beepURL, false, "Greeting")
+							// err = api.SpeakSentenceToCall(callID, "Hello. Please leave a message after beep.", "Greeting")
 						} else {
-							api.PlayAudioToCall(callID, user.GreetingURL, false, "Greeting")
+							debugf("Play user's greeting\n")
+							err = api.PlayAudioToCall(callID, user.GreetingURL, false, "Greeting")
 						}
+						debugf("Error on play greeting %v\n", err)
 					}
 				}()
-
+				c.String(http.StatusOK, "")
 				return
 			}
 			if from == user.SIPURI {
@@ -272,7 +272,7 @@ func getRoutes(router *gin.Engine, db *gorm.DB, newVoiceMessageEvent *pubsub.Pub
 					StartTime: parseTime(recording.StartTime),
 					EndTime:   parseTime(recording.EndTime),
 					UserID:    user.ID,
-					From:      call.From,
+					From:      getCallerID(db, call.From),
 				}
 				err = db.Create(message).Error
 				if err != nil {
@@ -291,7 +291,7 @@ func getRoutes(router *gin.Engine, db *gorm.DB, newVoiceMessageEvent *pubsub.Pub
 				debugf("Error on getting bridged calls: %s\n", err.Error())
 				break
 			}
-			debugf("Hangup other %d calls", len(activeCalls))
+			debugf("Hangup other %d calls\n", len(activeCalls))
 			for _, call := range activeCalls {
 				api.Hangup(call.CallID)
 			}
@@ -513,6 +513,15 @@ func playGreeting(user *User) string {
 
 func playBeep() string {
 	return playAudioBXML(beepURL)
+}
+
+func getCallerID(db *gorm.DB, number string) string {
+	user := &User{}
+	if strings.Index(number, "sip:") == 0 && !db.First(user, "sip_uri = ?", number).RecordNotFound() {
+		// try to use phone number for caller id instead of sip uri
+		return user.PhoneNumber
+	}
+	return number
 }
 
 func setErrorMessage(c *gin.Context, code int, message string) {
