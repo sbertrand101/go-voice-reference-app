@@ -32,6 +32,7 @@ const tonesURL = "https://s3.amazonaws.com/bwdemos/media/ring.mp3"
 
 func getRoutes(router *gin.Engine, db *gorm.DB, newVoiceMessageEvent *pubsub.PubSub) error {
 	if newVoiceMessageEvent == nil {
+		debugf("Using default newVoiceMessageEvent\n")
 		newVoiceMessageEvent = pubsub.New(1)
 	}
 
@@ -201,6 +202,7 @@ func getRoutes(router *gin.Engine, db *gorm.DB, newVoiceMessageEvent *pubsub.Pub
 					From:               callerID,
 					To:                 user.SIPURI,
 					Tag:                fmt.Sprintf("AnotherLeg:%v:%v", callID, bridgeID),
+					CallbackTimeout:    15,
 					CallbackHTTPMethod: "GET",
 					CallbackURL:        fmt.Sprintf("https://%s/callCallback", c.Request.Host),
 					FallbackURL:        fmt.Sprintf("http://%s/callCallback", c.Request.Host),
@@ -219,11 +221,9 @@ func getRoutes(router *gin.Engine, db *gorm.DB, newVoiceMessageEvent *pubsub.Pub
 					if call.State == "started" {
 						api.StopPlayAudioToCall(callID)
 						api.Hangup(anotherCallID)
-						// redirect to voice mail after some seconds of waiting
 						debugf("Moving to voice mail\n")
 						if user.GreetingURL == "" {
 							debugf("Play default greeting\n")
-							// err = api.PlayAudioToCall(callID, beepURL, false, "Greeting")
 							err = api.SpeakSentenceToCall(callID, "Hello. Please leave a message after beep.", "Greeting")
 						} else {
 							debugf("Play user's greeting\n")
@@ -289,6 +289,7 @@ func getRoutes(router *gin.Engine, db *gorm.DB, newVoiceMessageEvent *pubsub.Pub
 
 				// send notification about new voice mail message
 				if newVoiceMessageEvent != nil {
+					debugf("Publish SSE notification\n")
 					newVoiceMessageEvent.Pub(message, strconv.FormatUint(uint64(user.ID), 10))
 				}
 			}
