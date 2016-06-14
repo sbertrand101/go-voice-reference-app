@@ -72,10 +72,11 @@ func (api *catapultAPI) GetApplicationID() (string, error) {
 		}
 	}
 	applicationID, err = api.client.CreateApplication(&bandwidth.ApplicationData{
-		Name:               appName,
-		AutoAnswer:         true,
-		CallbackHTTPMethod: "GET",
-		IncomingCallURL:    fmt.Sprintf("http://%s/callCallback", host),
+		Name:                    appName,
+		AutoAnswer:              true,
+		CallbackHTTPMethod:      "GET",
+		IncomingCallURL:         fmt.Sprintf("https://%s/callCallback", host),
+		IncomingCallFallbackURL: fmt.Sprintf("http://%s/callCallback", host),
 	})
 	if applicationID != "" {
 		applicationIDs[host] = applicationID

@@ -65,6 +65,7 @@ func (m *VoiceMailMessage) ToJSONObject() map[string]interface{} {
 
 // ActiveCall model
 type ActiveCall struct {
+	ID        uint      `gorm:"primary_key"`
 	CreatedAt time.Time `gorm:"index"`
 	UserID    uint      `gorm:"column:user_id;not_null;index"`
 	CallID    string    `gorm:"column:call_id;type:varchar(64);not_null;index"`
