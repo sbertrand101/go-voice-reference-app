@@ -158,16 +158,6 @@ func getRoutes(router *gin.Engine, db *gorm.DB, newVoiceMessageEvent *pubsub.Pub
 			if fromAnotherLeg {
 				debugf("Another leg has answered\n")
 				api.StopPlayAudioToCall(values[1]) // stop tones
-				err := db.Create(&ActiveCall{
-					CallID:   callID,
-					BridgeID: values[2],
-					UserID:   user.ID,
-					From:     from,
-					To:       to,
-				}).Error
-				if err != nil {
-					debugf("Error on adding active call: %s\n", err.Error())
-				}
 				break
 			}
 
@@ -199,18 +189,25 @@ func getRoutes(router *gin.Engine, db *gorm.DB, newVoiceMessageEvent *pubsub.Pub
 				})
 
 				debugf("Calling to another leg %s\n", user.SIPURI)
-				_, err = api.CreateCall(&bandwidth.CreateCallData{
+				anotherCallID, err := api.CreateCall(&bandwidth.CreateCallData{
 					BridgeID:           bridgeID,
 					From:               callerID,
 					To:                 user.SIPURI,
 					Tag:                fmt.Sprintf("AnotherLeg:%s:%s", callID, bridgeID),
-					CallbackTimeout:    10,
+					CallTimeout:        7,
 					CallbackHTTPMethod: "GET",
 					CallbackURL:        buildAbsoluteURL(c, "/callCallback"),
 				})
 				if err != nil {
 					debugf("Error on creating a another leg call: %s\n", err.Error())
 				}
+				db.Create(&ActiveCall{
+					CallID:   anotherCallID,
+					BridgeID: bridgeID,
+					UserID:   user.ID,
+					From:     callerID,
+					To:       user.SIPURI,
+				})
 				break
 			}
 			if from == user.SIPURI {
@@ -235,59 +232,62 @@ func getRoutes(router *gin.Engine, db *gorm.DB, newVoiceMessageEvent *pubsub.Pub
 
 			}
 			break
-		case "hangup":
-			callID := form.Get("callId")
+		case "timeout":
 			if fromAnotherLeg {
-				debugf("Another leg hangup\n")
-				if form.Get("cause") == "USER_BUSY" {
-					// move to voice mail
-					callID = values[1]
-					api.StopPlayAudioToCall(callID)
-					debugf("Moving to voice mail\n")
-					if user.GreetingURL == "" {
-						debugf("Play default greeting\n")
-						api.SpeakSentenceToCall(callID, "Hello. Please leave a message after beep.", "Greeting")
-					} else {
-						debugf("Play user's greeting\n")
-						api.PlayAudioToCall(callID, user.GreetingURL, false, "Greeting")
-					}
-					c.String(http.StatusOK, "")
-					return
+				debugf("Another leg timeout\n")
+				callID = values[1]
+				api.StopPlayAudioToCall(callID)
+				db.Debug().Model(&ActiveCall{}).Where("call_id = ?", callID).Update("bridge_id", "") // to suppress hang up this call too
+				debugf("Moving to voice mail\n")
+				if user.GreetingURL == "" {
+					debugf("Play default greeting\n")
+					api.SpeakSentenceToCall(callID, "Hello. Please leave a message after beep.", "Greeting")
+				} else {
+					debugf("Play user's greeting\n")
+					api.PlayAudioToCall(callID, user.GreetingURL, false, "Greeting")
 				}
-			} else {
-				call, err := api.GetCall(callID)
-				if err != nil {
-					debugf("Error on getting call: %s\n", err.Error())
-					break
-				}
-				recordings, err := api.GetCallRecordings(callID)
-				if err != nil {
-					debugf("Error on Getting call recordings: %s\n", err.Error())
-					break
-				}
-				if user != nil && recordings != nil && len(recordings) > 0 {
-					debugf("Saving recorded voice message to db\n")
-					recording := recordings[0]
-					message := &VoiceMailMessage{
-						MediaURL:  recording.Media,
-						StartTime: parseTime(recording.StartTime),
-						EndTime:   parseTime(recording.EndTime),
-						UserID:    user.ID,
-						From:      getCallerID(db, call.From),
-					}
-					err = db.Create(message).Error
+				break
+			}
+		case "recording":
+			{
+				if form.Get("state") == "complete" {
+					debugf("Get recorded voice message info\n")
+					recording, err := api.GetRecording(form.Get("recordingId"))
 					if err != nil {
-						debugf("Error on on saving voice mail message: %s\n", err.Error())
+						debugf("Error on get recording info %s\n", err.Error())
 						break
 					}
+					if err != nil {
+						debugf("Error on get call info %s\n", err.Error())
+						break
+					}
+					call, err := api.GetCall(callID)
+					if user != nil {
+						debugf("Saving recorded voice message to db\n")
+						message := &VoiceMailMessage{
+							MediaURL:  recording.Media,
+							StartTime: parseTime(recording.StartTime),
+							EndTime:   parseTime(recording.EndTime),
+							UserID:    user.ID,
+							From:      getCallerID(db, call.From),
+						}
+						err = db.Create(message).Error
+						if err != nil {
+							debugf("Error on on saving voice mail message: %s\n", err.Error())
+							break
+						}
 
-					// send notification about new voice mail message
-					if newVoiceMessageEvent != nil {
-						debugf("Publish SSE notification\n")
-						newVoiceMessageEvent.Pub(message, strconv.FormatUint(uint64(user.ID), 10))
+						// send notification about new voice mail message
+						if newVoiceMessageEvent != nil {
+							debugf("Publish SSE notification\n")
+							newVoiceMessageEvent.Pub(message, strconv.FormatUint(uint64(user.ID), 10))
+						}
 					}
 				}
 			}
+		case "hangup":
+			callID := form.Get("callId")
+
 			activeCalls := []ActiveCall{}
 			activeCall := ActiveCall{}
 			if db.First(&activeCall, "call_id = ?", callID).RecordNotFound() || activeCall.BridgeID == "" {
