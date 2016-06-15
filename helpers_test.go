@@ -9,7 +9,6 @@ import (
 	"net/http/httptest"
 	"os"
 	"testing"
-	"time"
 
 	"github.com/bandwidthcom/go-bandwidth"
 	"github.com/gin-gonic/gin"
@@ -155,13 +154,18 @@ func (m *fakeCatapultAPI) GetCall(callID string) (*bandwidth.Call, error) {
 	return args.Get(0).(*bandwidth.Call), args.Error(1)
 }
 
-func (m *fakeCatapultAPI) PlayAudioToCall(callID string, url string) error {
-	args := m.Called(callID, url)
+func (m *fakeCatapultAPI) PlayAudioToCall(callID string, url string, loop bool, tag string) error {
+	args := m.Called(callID, url, loop, tag)
 	return args.Error(0)
 }
 
-func (m *fakeCatapultAPI) SpeakSentenceToCall(callID string, text string) error {
-	args := m.Called(callID, text)
+func (m *fakeCatapultAPI) StopPlayAudioToCall(callID string) error {
+	args := m.Called(callID)
+	return args.Error(0)
+}
+
+func (m *fakeCatapultAPI) SpeakSentenceToCall(callID string, text string, tag string) error {
+	args := m.Called(callID, text, tag)
 	return args.Error(0)
 }
 
@@ -185,17 +189,14 @@ func (m *fakeCatapultAPI) DownloadMediaFile(name string) (io.ReadCloser, string,
 	return args.Get(0).(io.ReadCloser), args.String(1), args.Error(2)
 }
 
-func (m *fakeCatapultAPI) GetCallRecordings(callID string) ([]*bandwidth.Recording, error) {
+func (m *fakeCatapultAPI) CreateBridge(data *bandwidth.BridgeData) (string, error) {
+	args := m.Called(data)
+	return args.String(0), args.Error(1)
+}
+
+func (m *fakeCatapultAPI) Hangup(callID string) error {
 	args := m.Called(callID)
-	return args.Get(0).([]*bandwidth.Recording), args.Error(1)
-}
-
-type fakeTimerAPI struct {
-	mock.Mock
-}
-
-func (m *fakeTimerAPI) Sleep(d time.Duration) {
-	m.Called(d)
+	return args.Error(0)
 }
 
 type fakeSSEEmiter struct {
