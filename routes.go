@@ -140,16 +140,16 @@ func getRoutes(router *gin.Engine, db *gorm.DB, newVoiceMessageEvent *pubsub.Pub
 		debugf("Catapult Event: %v\n", c.Request.URL.RawQuery)
 		api := c.MustGet("catapultAPI").(catapultAPIInterface)
 		form := c.Request.URL.Query()
-		var user *User
 		tag := form.Get("tag")
 		values := strings.Split(tag, ":")
 		fromAnotherLeg := (len(values) == 3 && values[0] == "AnotherLeg")
-		callID := form.Get("callId")
+		var callID string
 		if fromAnotherLeg {
-			user, _ = getUserForCall(values[1], db)
+			callID = values[1]
 		} else {
-			user, _ = getUserForCall(callID, db)
+			callID = form.Get("callId")
 		}
+		user, _ := getUserForCall(callID, db)
 		switch form.Get("eventType") {
 		case "answer":
 			user = &User{}
@@ -157,7 +157,7 @@ func getRoutes(router *gin.Engine, db *gorm.DB, newVoiceMessageEvent *pubsub.Pub
 			to := form.Get("to")
 			if fromAnotherLeg {
 				debugf("Another leg has answered\n")
-				api.StopPlayAudioToCall(values[1]) // stop tones
+				api.StopPlayAudioToCall(callID) // stop tones
 				break
 			}
 
@@ -180,6 +180,7 @@ func getRoutes(router *gin.Engine, db *gorm.DB, newVoiceMessageEvent *pubsub.Pub
 					break
 				}
 
+				// save current call data to db
 				db.Create(&ActiveCall{
 					CallID:   callID,
 					BridgeID: bridgeID,
@@ -194,13 +195,14 @@ func getRoutes(router *gin.Engine, db *gorm.DB, newVoiceMessageEvent *pubsub.Pub
 					From:               callerID,
 					To:                 user.SIPURI,
 					Tag:                fmt.Sprintf("AnotherLeg:%s:%s", callID, bridgeID),
-					CallTimeout:        7,
+					CallTimeout:        15,
 					CallbackHTTPMethod: "GET",
 					CallbackURL:        buildAbsoluteURL(c, "/callCallback"),
 				})
 				if err != nil {
 					debugf("Error on creating a another leg call: %s\n", err.Error())
 				}
+				// save bridged call data to db too
 				db.Create(&ActiveCall{
 					CallID:   anotherCallID,
 					BridgeID: bridgeID,
@@ -235,7 +237,6 @@ func getRoutes(router *gin.Engine, db *gorm.DB, newVoiceMessageEvent *pubsub.Pub
 		case "timeout":
 			if fromAnotherLeg {
 				debugf("Another leg timeout\n")
-				callID = values[1]
 				api.StopPlayAudioToCall(callID)
 				db.Debug().Model(&ActiveCall{}).Where("call_id = ?", callID).Update("bridge_id", "") // to suppress hang up this call too
 				debugf("Moving to voice mail\n")

@@ -39,7 +39,6 @@ type catapultAPIInterface interface {
 	GetRecording(recordingID string) (*bandwidth.Recording, error)
 	CreateCall(data *bandwidth.CreateCallData) (string, error)
 	DownloadMediaFile(name string) (io.ReadCloser, string, error)
-	GetCallRecordings(callID string) ([]*bandwidth.Recording, error)
 	CreateBridge(data *bandwidth.BridgeData) (string, error)
 	Hangup(callID string) error
 }
@@ -202,10 +201,6 @@ func (api *catapultAPI) CreateGather(callID string, data *bandwidth.CreateGather
 
 func (api *catapultAPI) GetRecording(recordingID string) (*bandwidth.Recording, error) {
 	return api.client.GetRecording(recordingID)
-}
-
-func (api *catapultAPI) GetCallRecordings(callID string) ([]*bandwidth.Recording, error) {
-	return api.client.GetCallRecordings(callID)
 }
 
 func (api *catapultAPI) CreateCall(data *bandwidth.CreateCallData) (string, error) {
