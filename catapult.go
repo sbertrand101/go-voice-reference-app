@@ -72,11 +72,10 @@ func (api *catapultAPI) GetApplicationID() (string, error) {
 		}
 	}
 	applicationID, err = api.client.CreateApplication(&bandwidth.ApplicationData{
-		Name:                    appName,
-		AutoAnswer:              true,
-		CallbackHTTPMethod:      "GET",
-		IncomingCallURL:         fmt.Sprintf("https://%s/callCallback", host),
-		IncomingCallFallbackURL: fmt.Sprintf("http://%s/callCallback", host),
+		Name:               appName,
+		AutoAnswer:         true,
+		CallbackHTTPMethod: "GET",
+		IncomingCallURL:    buildAbsoluteURL(api.context, "/callCallback"),
 	})
 	if applicationID != "" {
 		applicationIDs[host] = applicationID
@@ -278,6 +277,20 @@ func catapultMiddleware(c *gin.Context) {
 	}
 	c.Set("catapultAPI", api)
 	c.Next()
+}
+
+func buildAbsoluteURL(c *gin.Context, path string) string {
+	proto := c.Request.Header.Get("X-Forwarded-Proto")
+	if proto == "" {
+		proto = c.Request.URL.Scheme
+		if proto == "" {
+			proto = "http"
+		}
+	}
+	if path[0] != '/' {
+		path = fmt.Sprintf("/%s", path)
+	}
+	return fmt.Sprintf("%s://%s%s", proto, c.Request.Host, path)
 }
 
 var randomString = func(strlen int) string {
