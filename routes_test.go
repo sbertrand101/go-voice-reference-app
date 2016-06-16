@@ -383,6 +383,16 @@ func TestRouteCallCallbackIncomingCallFail2(t *testing.T) {
 	assert.Equal(t, 0, count)
 }
 
+func TestRouteCallCallbackAnswerAnotherLeg(t *testing.T) {
+	api := &fakeCatapultAPI{}
+	api.On("StopPlayAudioToCall", "callId").Return(nil)
+	db := openDBConnection(t)
+	defer db.Close()
+	w := makeRequest(t, api, db, http.MethodGet, "/callCallback?callId=callID1&eventType=answer&from=%2B1472583688&to=%2B1234567892&&tag=AnotherLeg%3AcallId", "")
+	assert.Equal(t, http.StatusOK, w.Code)
+	api.AssertExpectations(t)
+}
+
 func TestRouteCallCallbackHangupWithBridgedCalls(t *testing.T) {
 	api := &fakeCatapultAPI{}
 	db := openDBConnection(t)
