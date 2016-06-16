@@ -200,6 +200,7 @@ func getRoutes(router *gin.Engine, db *gorm.DB, newVoiceMessageEvent *pubsub.Pub
 				})
 				if err != nil {
 					debugf("Error on creating a another leg call: %s\n", err.Error())
+					break
 				}
 				// save bridged call data to db too
 				db.Create(&ActiveCall{
@@ -261,11 +262,11 @@ func getRoutes(router *gin.Engine, db *gorm.DB, newVoiceMessageEvent *pubsub.Pub
 						debugf("Error on get recording info %s\n", err.Error())
 						break
 					}
+					call, err := api.GetCall(callID)
 					if err != nil {
 						debugf("Error on get call info %s\n", err.Error())
 						break
 					}
-					call, err := api.GetCall(callID)
 					if user != nil {
 						debugf("Saving recorded voice message to db\n")
 						message := &VoiceMailMessage{
@@ -294,11 +295,12 @@ func getRoutes(router *gin.Engine, db *gorm.DB, newVoiceMessageEvent *pubsub.Pub
 
 			activeCalls := []ActiveCall{}
 			activeCall := ActiveCall{}
+			debugf("Hangup %s\n", callID)
 			// look for bridge data for call first
 			if db.First(&activeCall, "call_id = ?", callID).RecordNotFound() || activeCall.BridgeID == "" {
 				break
 			}
-			// then llok for other calls in the bridge
+			// then look for other calls in the bridge
 			err := db.Find(&activeCalls, "bridge_id = ? AND call_id <> ?", activeCall.BridgeID, callID).Error
 			if err != nil {
 				debugf("Error on getting bridged calls: %s\n", err.Error())

@@ -582,7 +582,7 @@ func TestCreateBridge(t *testing.T) {
 		RequestHandler{
 			PathAndQuery:     "/v1/users/userID/bridges",
 			Method:           http.MethodPost,
-			EstimatedContent: `{"callIds":["456"],"bridgeAudio":true}`,
+			EstimatedContent: `{"bridgeAudio":"true","callIds":["456"]}`,
 			HeadersToSend:    map[string]string{"Location": "/v1/users/userID/bridges/123"},
 		},
 	})

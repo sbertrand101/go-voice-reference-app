@@ -275,10 +275,17 @@ func TestRouteCallCallbackOutgoingCall(t *testing.T) {
 	api.AssertExpectations(t)
 }
 
-func TestRouteCallCallbackIncomingCall(t *testing.T) {
+func TestRouteCallCallbackIncomingCallSimple(t *testing.T) {
 	api := &fakeCatapultAPI{}
+	api.On("PlayAudioToCall", "callID", tonesURL, true, "").Return(nil)
+	api.On("CreateBridge", &bandwidth.BridgeData{
+		CallIDs:     []string{"callID"},
+		BridgeAudio: true,
+	}).Return("bridgeId", nil)
+	api.On("CreateCall", &bandwidth.CreateCallData{From: "+1472583688", RecordingFileFormat: "", RecordingEnabled: false, RecordingMaxDuration: 0, State: "", To: "sip:itest@test.com", TranscriptionEnabled: false, SipHeaders: map[string]string(nil), ConferenceID: "", BridgeID: "bridgeId", Tag: "AnotherLeg:callID", CallbackURL: "http:///callCallback", CallbackHTTPMethod: "GET", FallbackURL: "", CallbackTimeout: 0, CallTimeout: 10}).Return("callId1", nil)
 	db := openDBConnection(t)
 	defer db.Close()
+	db.Delete(&ActiveCall{})
 	user := &User{
 		AreaCode:    "910",
 		SIPURI:      "sip:itest@test.com",
@@ -290,10 +297,16 @@ func TestRouteCallCallbackIncomingCall(t *testing.T) {
 	w := makeRequest(t, api, db, http.MethodGet, "/callCallback?callId=callID&eventType=answer&from=%2B1472583688&to=%2B1234567892", "")
 	assert.Equal(t, http.StatusOK, w.Code)
 	api.AssertExpectations(t)
+	count := 0
+	db.Model(&ActiveCall{}).Count(&count)
+	assert.Equal(t, 2, count)
 }
 
 func TestRouteCallCallbackIncomingCallSipToSip(t *testing.T) {
 	api := &fakeCatapultAPI{}
+	api.On("PlayAudioToCall", "callID", "https://s3.amazonaws.com/bwdemos/media/ring.mp3", true, "").Return(nil)
+	api.On("CreateBridge", &bandwidth.BridgeData{BridgeAudio: true, CallIDs: []string{"callID"}}).Return("456", nil)
+	api.On("CreateCall", &bandwidth.CreateCallData{From: "+1234567802", RecordingFileFormat: "", RecordingEnabled: false, RecordingMaxDuration: 0, State: "", To: "sip:i1test@test.com", TranscriptionEnabled: false, SipHeaders: map[string]string(nil), ConferenceID: "", BridgeID: "456", Tag: "AnotherLeg:callID", CallbackURL: "http:///callCallback", CallbackHTTPMethod: "GET", FallbackURL: "", CallbackTimeout: 0, CallTimeout: 10}).Return("callID", nil)
 	db := openDBConnection(t)
 	defer db.Close()
 	user1 := &User{
@@ -317,48 +330,60 @@ func TestRouteCallCallbackIncomingCallSipToSip(t *testing.T) {
 	api.AssertExpectations(t)
 }
 
-func TestRouteCallCallbackIncomingCallTimeout(t *testing.T) {
+func TestRouteCallCallbackIncomingCallFail1(t *testing.T) {
 	api := &fakeCatapultAPI{}
+	api.On("PlayAudioToCall", "callID", tonesURL, true, "").Return(nil)
+	api.On("CreateBridge", &bandwidth.BridgeData{
+		CallIDs:     []string{"callID"},
+		BridgeAudio: true,
+	}).Return("bridgeId", nil)
+	api.On("CreateCall", &bandwidth.CreateCallData{From: "+1472583688", RecordingFileFormat: "", RecordingEnabled: false, RecordingMaxDuration: 0, State: "", To: "sip:itest@test.com", TranscriptionEnabled: false, SipHeaders: map[string]string(nil), ConferenceID: "", BridgeID: "bridgeId", Tag: "AnotherLeg:callID", CallbackURL: "http:///callCallback", CallbackHTTPMethod: "GET", FallbackURL: "", CallbackTimeout: 0, CallTimeout: 10}).Return("", errors.New("error"))
 	db := openDBConnection(t)
 	defer db.Close()
-	user1 := &User{
+	db.Delete(&ActiveCall{})
+	user := &User{
 		AreaCode:    "910",
-		SIPURI:      "sip:i3test@test.com",
-		PhoneNumber: "+1234567803",
-		UserName:    "i3user",
+		SIPURI:      "sip:itest@test.com",
+		PhoneNumber: "+1234567892",
+		UserName:    "iuser100",
 	}
-	user1.SetPassword("123456")
-	db.Save(user1)
-	api.On("SpeakSentenceToCall", "callId", "Hello. Please leave a message after beep.").Return(nil)
-	api.On("PlayAudioToCall", "callId", beepURL).Return(nil)
-	api.On("UpdateCall", "callId", &bandwidth.UpdateCallData{RecordingEnabled: true}).Return("", nil)
-	w := makeRequest(t, api, db, http.MethodGet, fmt.Sprintf("/callCallback?callId=transferedCallID&eventType=timeout&tag=%v%%3AcallId", user1.ID), "")
+	user.SetPassword("123456")
+	db.Save(user)
+	w := makeRequest(t, api, db, http.MethodGet, "/callCallback?callId=callID&eventType=answer&from=%2B1472583688&to=%2B1234567892", "")
 	assert.Equal(t, http.StatusOK, w.Code)
 	api.AssertExpectations(t)
+	count := 0
+	db.Model(&ActiveCall{}).Count(&count)
+	assert.Equal(t, 1, count)
 }
 
-func TestRouteCallCallbackIncomingCallTimeoutWithGreeting(t *testing.T) {
+func TestRouteCallCallbackIncomingCallFail2(t *testing.T) {
 	api := &fakeCatapultAPI{}
+	api.On("PlayAudioToCall", "callID", tonesURL, true, "").Return(nil)
+	api.On("CreateBridge", &bandwidth.BridgeData{
+		CallIDs:     []string{"callID"},
+		BridgeAudio: true,
+	}).Return("", errors.New("error"))
 	db := openDBConnection(t)
 	defer db.Close()
-	user1 := &User{
+	db.Delete(&ActiveCall{})
+	user := &User{
 		AreaCode:    "910",
-		SIPURI:      "sip:i4test@test.com",
-		PhoneNumber: "+1234567804",
-		UserName:    "i4user",
-		GreetingURL: "greeting",
+		SIPURI:      "sip:itest@test.com",
+		PhoneNumber: "+1234567892",
+		UserName:    "iuser101",
 	}
-	user1.SetPassword("123456")
-	db.Save(user1)
-	api.On("PlayAudioToCall", "callId", "greeting").Return(nil)
-	api.On("PlayAudioToCall", "callId", beepURL).Return(nil)
-	api.On("UpdateCall", "callId", &bandwidth.UpdateCallData{RecordingEnabled: true}).Return("", nil)
-	w := makeRequest(t, api, db, http.MethodGet, fmt.Sprintf("/callCallback?callId=transferedCallID&eventType=timeout&tag=%v%%3AcallId", user1.ID), "")
+	user.SetPassword("123456")
+	db.Save(user)
+	w := makeRequest(t, api, db, http.MethodGet, "/callCallback?callId=callID&eventType=answer&from=%2B1472583688&to=%2B1234567892", "")
 	assert.Equal(t, http.StatusOK, w.Code)
 	api.AssertExpectations(t)
+	count := 0
+	db.Model(&ActiveCall{}).Count(&count)
+	assert.Equal(t, 0, count)
 }
 
-func TestRouteCallCallbackHangup(t *testing.T) {
+func TestRouteCallCallbackHangupWithBridgedCalls(t *testing.T) {
 	api := &fakeCatapultAPI{}
 	db := openDBConnection(t)
 	defer db.Close()
@@ -370,39 +395,60 @@ func TestRouteCallCallbackHangup(t *testing.T) {
 	}
 	user.SetPassword("123456")
 	db.Save(user)
+	db.Delete(&ActiveCall{}, "bridge_id = ? or call_id = ?", "bridgeID", "callId")
 	activeCall := &ActiveCall{
-		UserID: user.ID,
-		CallID: "callId",
+		UserID:   user.ID,
+		CallID:   "callId",
+		BridgeID: "bridgeID",
 	}
 	db.Save(activeCall)
-	db.Delete(&VoiceMailMessage{}, "user_id = ?", user.ID)
-	api.On("GetCall", "callId").Return(&bandwidth.Call{
-		From: "from",
-	}, nil)
-	api.On("GetCallRecordings", "callId").Return([]*bandwidth.Recording{
-		&bandwidth.Recording{
-			Media:     "url",
-			StartTime: "2016-06-02T10:20:00Z",
-			EndTime:   "2016-06-02T10:21:00Z",
-		},
-	}, nil)
+	activeCall = &ActiveCall{
+		UserID:   user.ID,
+		CallID:   "callId1",
+		BridgeID: "bridgeID",
+	}
+	db.Save(activeCall)
+	api.On("Hangup", "callId1").Return(nil)
 	w := makeRequest(t, api, db, http.MethodGet, "/callCallback?callId=callId&eventType=hangup", "")
 	assert.Equal(t, http.StatusOK, w.Code)
 	api.AssertExpectations(t)
-	message := &VoiceMailMessage{}
-	assert.NoError(t, db.First(message, "user_id = ?", user.ID).Error)
-	assert.Equal(t, "url", message.MediaURL)
 }
 
-func TestRouteCallCallbackHangupDoNothingForMissingRecordings(t *testing.T) {
+func TestRouteCallCallbackHangupDoNothingForMissingBridges(t *testing.T) {
 	api := &fakeCatapultAPI{}
 	db := openDBConnection(t)
 	defer db.Close()
+	db.Delete(&ActiveCall{}, "call_id = ?", "callId")
+	w := makeRequest(t, api, db, http.MethodGet, "/callCallback?callId=callId&eventType=hangup", "")
+	assert.Equal(t, http.StatusOK, w.Code)
+	api.AssertExpectations(t)
+}
+
+func TestRouteCallCallbackRecordingDoNothingForNonCompletedRecording(t *testing.T) {
+	api := &fakeCatapultAPI{}
+	db := openDBConnection(t)
+	defer db.Close()
+	w := makeRequest(t, api, db, http.MethodGet, "/callCallback?callId=callId&eventType=recording&state=start", "")
+	assert.Equal(t, http.StatusOK, w.Code)
+	api.AssertExpectations(t)
+}
+
+func TestRouteCallCallbackRecordingForCompletedRecording(t *testing.T) {
+	api := &fakeCatapultAPI{}
+	api.On("GetRecording", "recordingId").Return(&bandwidth.Recording{
+		Media: "url",
+	}, nil)
+	api.On("GetCall", "callId").Return(&bandwidth.Call{
+		From: "+1472583690",
+	}, nil)
+	db := openDBConnection(t)
+	defer db.Close()
+	db.Delete(&ActiveCall{}, "call_id = ?", "callId")
 	user := &User{
 		AreaCode:    "910",
-		SIPURI:      "sip:i6test@test.com",
-		PhoneNumber: "+1234567806",
-		UserName:    "i6user",
+		SIPURI:      "sip:r1test@test.com",
+		PhoneNumber: "+1234567803",
+		UserName:    "r1user",
 	}
 	user.SetPassword("123456")
 	db.Save(user)
@@ -411,35 +457,131 @@ func TestRouteCallCallbackHangupDoNothingForMissingRecordings(t *testing.T) {
 		CallID: "callId",
 	}
 	db.Save(activeCall)
-	db.Delete(&VoiceMailMessage{}, "user_id = ?", user.ID)
-	api.On("GetCall", "callId").Return(&bandwidth.Call{
-		From: "from",
+	w := makeRequest(t, api, db, http.MethodGet, "/callCallback?callId=callId&eventType=recording&state=complete&recordingId=recordingId", "")
+	assert.Equal(t, http.StatusOK, w.Code)
+	api.AssertExpectations(t)
+	voiceMessage := &VoiceMailMessage{}
+	assert.NoError(t, db.First(voiceMessage, "user_id = ?", user.ID).Error)
+	assert.Equal(t, "+1472583690", voiceMessage.From)
+	assert.Equal(t, "url", voiceMessage.MediaURL)
+}
+
+func TestRouteCallCallbackRecordingForCompletedRecordingFail1(t *testing.T) {
+	api := &fakeCatapultAPI{}
+	api.On("GetRecording", "recordingId").Return(&bandwidth.Recording{}, errors.New("error"))
+	db := openDBConnection(t)
+	defer db.Close()
+	db.Delete(&ActiveCall{}, "call_id = ?", "callId")
+	db.Delete(&VoiceMailMessage{})
+	w := makeRequest(t, api, db, http.MethodGet, "/callCallback?callId=callId&eventType=recording&state=complete&recordingId=recordingId", "")
+	assert.Equal(t, http.StatusOK, w.Code)
+	api.AssertExpectations(t)
+	voiceMessage := &VoiceMailMessage{}
+	assert.True(t, db.First(voiceMessage).RecordNotFound())
+}
+
+func TestRouteCallCallbackRecordingForCompletedRecordingFail2(t *testing.T) {
+	api := &fakeCatapultAPI{}
+	api.On("GetRecording", "recordingId").Return(&bandwidth.Recording{
+		Media: "url",
 	}, nil)
-	api.On("GetCallRecordings", "callId").Return([]*bandwidth.Recording{}, nil)
-	w := makeRequest(t, api, db, http.MethodGet, "/callCallback?callId=callId&eventType=hangup", "")
-	assert.Equal(t, http.StatusOK, w.Code)
-	api.AssertExpectations(t)
-	message := &VoiceMailMessage{}
-	assert.True(t, db.First(message, "user_id = ?", user.ID).RecordNotFound())
-}
-
-func TestRouteCallCallbackHangupDoNothingForFailedGetCall(t *testing.T) {
-	api := &fakeCatapultAPI{}
-	db := openDBConnection(t)
-	defer db.Close()
 	api.On("GetCall", "callId").Return(&bandwidth.Call{}, errors.New("error"))
-	w := makeRequest(t, api, db, http.MethodGet, "/callCallback?callId=callId&eventType=hangup", "")
+	db := openDBConnection(t)
+	defer db.Close()
+	db.Delete(&ActiveCall{}, "call_id = ?", "callId")
+	db.Delete(&VoiceMailMessage{})
+	w := makeRequest(t, api, db, http.MethodGet, "/callCallback?callId=callId&eventType=recording&state=complete&recordingId=recordingId", "")
+	assert.Equal(t, http.StatusOK, w.Code)
+	api.AssertExpectations(t)
+	voiceMessage := &VoiceMailMessage{}
+	assert.True(t, db.First(voiceMessage).RecordNotFound())
+}
+
+func TestRouteCallCallbackTimeoutWithDefaultGreeting(t *testing.T) {
+	api := &fakeCatapultAPI{}
+	api.On("StopPlayAudioToCall", "callId").Return(nil)
+	api.On("SpeakSentenceToCall", "callId", "Hello. Please leave a message after beep.", "Greeting").Return(nil)
+	db := openDBConnection(t)
+	defer db.Close()
+	db.Delete(&ActiveCall{}, "call_id = ?", "callId")
+	user := &User{
+		AreaCode:    "910",
+		SIPURI:      "sip:t1test@test.com",
+		PhoneNumber: "+1234567803",
+		UserName:    "t1user",
+	}
+	user.SetPassword("123456")
+	db.Save(user)
+	activeCall := &ActiveCall{
+		UserID: user.ID,
+		CallID: "callId",
+	}
+	db.Save(activeCall)
+	w := makeRequest(t, api, db, http.MethodGet, "/callCallback?callId=callId1&eventType=timeout&tag=AnotherLeg%3AcallId", "")
 	assert.Equal(t, http.StatusOK, w.Code)
 	api.AssertExpectations(t)
 }
 
-func TestRouteCallCallbackHangupDoNothingForFailedGetCallRecordings(t *testing.T) {
+func TestRouteCallCallbackTimeoutWithUserGreeting(t *testing.T) {
+	api := &fakeCatapultAPI{}
+	api.On("StopPlayAudioToCall", "callId").Return(nil)
+	api.On("PlayAudioToCall", "callId", "url", false, "Greeting").Return(nil)
+	db := openDBConnection(t)
+	defer db.Close()
+	db.Delete(&ActiveCall{}, "call_id = ?", "callId")
+	user := &User{
+		AreaCode:    "910",
+		SIPURI:      "sip:t2test@test.com",
+		PhoneNumber: "+1234567805",
+		UserName:    "t2user",
+		GreetingURL: "url",
+	}
+	user.SetPassword("123456")
+	db.Save(user)
+	activeCall := &ActiveCall{
+		UserID: user.ID,
+		CallID: "callId",
+	}
+	db.Save(activeCall)
+	w := makeRequest(t, api, db, http.MethodGet, "/callCallback?callId=callId1&eventType=timeout&tag=AnotherLeg%3AcallId", "")
+	assert.Equal(t, http.StatusOK, w.Code)
+	api.AssertExpectations(t)
+}
+
+func TestRouteCallCallbackPlaybackGreeting(t *testing.T) {
+	api := &fakeCatapultAPI{}
+	api.On("PlayAudioToCall", "callId", beepURL, false, "Beep").Return(nil)
+	db := openDBConnection(t)
+	defer db.Close()
+	w := makeRequest(t, api, db, http.MethodGet, "/callCallback?callId=callId&eventType=playback&status=done&tag=Greeting", "")
+	assert.Equal(t, http.StatusOK, w.Code)
+	api.AssertExpectations(t)
+}
+
+func TestRouteCallCallbackPlaybackBeep(t *testing.T) {
+	api := &fakeCatapultAPI{}
+	api.On("UpdateCall", "callId", &bandwidth.UpdateCallData{RecordingEnabled: true}).Return("", nil)
+	db := openDBConnection(t)
+	defer db.Close()
+	w := makeRequest(t, api, db, http.MethodGet, "/callCallback?callId=callId&eventType=playback&status=done&tag=Beep", "")
+	assert.Equal(t, http.StatusOK, w.Code)
+	api.AssertExpectations(t)
+}
+
+func TestRouteCallCallbackPlaybackDoNothingForNonCompletedStatus(t *testing.T) {
 	api := &fakeCatapultAPI{}
 	db := openDBConnection(t)
 	defer db.Close()
-	api.On("GetCall", "callId").Return(&bandwidth.Call{}, nil)
-	api.On("GetCallRecordings", "callId").Return([]*bandwidth.Recording{}, errors.New("error"))
-	w := makeRequest(t, api, db, http.MethodGet, "/callCallback?callId=callId&eventType=hangup", "")
+	w := makeRequest(t, api, db, http.MethodGet, "/callCallback?callId=callId&eventType=playback&status=started&tag=Beep", "")
+	assert.Equal(t, http.StatusOK, w.Code)
+	api.AssertExpectations(t)
+}
+
+func TestRouteCallCallbackPlaybackDoNothingForInvalidTag(t *testing.T) {
+	api := &fakeCatapultAPI{}
+	db := openDBConnection(t)
+	defer db.Close()
+	w := makeRequest(t, api, db, http.MethodGet, "/callCallback?callId=callId&eventType=playback&status=done&tag=Unknown", "")
 	assert.Equal(t, http.StatusOK, w.Code)
 	api.AssertExpectations(t)
 }
