@@ -28,9 +28,11 @@ type RegisterForm struct {
 }
 
 const beepURL = "https://s3.amazonaws.com/bwdemos/beep.mp3"
+const tonesURL = "https://s3.amazonaws.com/bwdemos/media/ring.mp3"
 
 func getRoutes(router *gin.Engine, db *gorm.DB, newVoiceMessageEvent *pubsub.PubSub) error {
 	if newVoiceMessageEvent == nil {
+		debugf("Using default newVoiceMessageEvent\n")
 		newVoiceMessageEvent = pubsub.New(1)
 	}
 
@@ -137,36 +139,78 @@ func getRoutes(router *gin.Engine, db *gorm.DB, newVoiceMessageEvent *pubsub.Pub
 	router.GET("/callCallback", func(c *gin.Context) {
 		debugf("Catapult Event: %v\n", c.Request.URL.RawQuery)
 		api := c.MustGet("catapultAPI").(catapultAPIInterface)
-		timerAPI := c.MustGet("timerAPI").(timerInterface)
 		form := c.Request.URL.Query()
-		user, _ := getUserForCall(form.Get("callId"), db)
+		primaryCallID := getPrimaryCallID(form.Get("tag"))
+		fromAnotherLeg := primaryCallID != ""
+		var callID string
+		if fromAnotherLeg {
+			callID = primaryCallID
+		} else {
+			callID = form.Get("callId")
+		}
+		user, _ := getUserForCall(callID, db)
 		switch form.Get("eventType") {
 		case "answer":
 			user = &User{}
 			from := form.Get("from")
 			to := form.Get("to")
-			callID := form.Get("callId")
-			if db.First(user, "sip_uri = ? OR phone_number = ?", from, to).RecordNotFound() {
-				return
+			if fromAnotherLeg {
+				debugf("Another leg has answered\n")
+				api.StopPlayAudioToCall(callID) // stop tones
+				break
 			}
-			db.Create(&ActiveCall{
-				CallID: callID,
-				UserID: user.ID,
-				From:   from,
-				To:     to,
-			})
+
+			if db.First(user, "sip_uri = ? OR phone_number = ?", from, to).RecordNotFound() {
+				break
+			}
 			if to == user.PhoneNumber {
-				debugf("Transfering incoming call to %q\n", user.SIPURI)
-				callerID := from
-				anotherUser := &User{}
-				if strings.Index(callerID, "sip:") == 0 && !db.First(anotherUser, "sip_uri = ?", callerID).RecordNotFound() {
-					// try to use phone number for caller id instead of sip uri
-					callerID = anotherUser.PhoneNumber
-				}
+				debugf("Bridging incoming call with %q\n", user.SIPURI)
+				callerID := getCallerID(db, from)
+				api.PlayAudioToCall(callID, tonesURL, true, "")
+
 				debugf("Using caller id %q\n", callerID)
-				c.Header("Content-Type", "text/xml")
-				c.String(http.StatusOK, buildBXML(transferBXML(user.SIPURI, callerID, 5, "", fmt.Sprintf("%v:%v", user.ID, callID))))
-				return
+				bridgeID, err := api.CreateBridge(&bandwidth.BridgeData{
+					CallIDs:     []string{callID},
+					BridgeAudio: true,
+				})
+
+				if err != nil {
+					debugf("Error on creating a bridge: %s\n", err.Error())
+					break
+				}
+
+				// save current call data to db
+				db.Create(&ActiveCall{
+					CallID:   callID,
+					BridgeID: bridgeID,
+					UserID:   user.ID,
+					From:     from,
+					To:       to,
+				})
+
+				debugf("Calling to another leg %s\n", user.SIPURI)
+				anotherCallID, err := api.CreateCall(&bandwidth.CreateCallData{
+					BridgeID:           bridgeID,
+					From:               callerID,
+					To:                 user.SIPURI,
+					Tag:                fmt.Sprintf("AnotherLeg:%s", callID),
+					CallTimeout:        10,
+					CallbackHTTPMethod: "GET",
+					CallbackURL:        buildAbsoluteURL(c, "/callCallback"),
+				})
+				if err != nil {
+					debugf("Error on creating a another leg call: %s\n", err.Error())
+					break
+				}
+				// save bridged call data to db too
+				db.Create(&ActiveCall{
+					CallID:   anotherCallID,
+					BridgeID: bridgeID,
+					UserID:   user.ID,
+					From:     callerID,
+					To:       user.SIPURI,
+				})
+				break
 			}
 			if from == user.SIPURI {
 				debugf("Transfering outgoing call to  %q\n", to)
@@ -175,59 +219,96 @@ func getRoutes(router *gin.Engine, db *gorm.DB, newVoiceMessageEvent *pubsub.Pub
 				return
 			}
 			break
-		case "timeout":
-			// we can't use BXM here because it is called for another (transfered) call
-			debugf("Moving to voice mail\n")
-			user = &User{}
-			tag := form.Get("tag")
-			values := strings.Split(tag, ":")
-			originalCallID := values[1]
-			if db.First(user, values[0]).RecordNotFound() {
-				return
-			}
-			timerAPI.Sleep(2 * time.Second)
-			if user.GreetingURL == "" {
-				api.SpeakSentenceToCall(originalCallID, "Hello. Please leave a message after beep.")
-			} else {
-				api.PlayAudioToCall(originalCallID, user.GreetingURL)
-			}
-			timerAPI.Sleep(5 * time.Second)
-			api.PlayAudioToCall(originalCallID, beepURL)
-			timerAPI.Sleep(time.Second)
-			api.UpdateCall(originalCallID, &bandwidth.UpdateCallData{RecordingEnabled: true})
-			break
-		case "hangup":
-			callID := form.Get("callId")
-			call, err := api.GetCall(callID)
-			if err != nil {
-				debugf("Error on getting call: %s\n", err.Error())
-				break
-			}
-			recordings, err := api.GetCallRecordings(callID)
-			if err != nil {
-				debugf("Error on Getting call recordings: %s\n", err.Error())
-				break
-			}
-			if user != nil && recordings != nil && len(recordings) > 0 {
-				debugf("Saving recorded voice message to db\n")
-				recording := recordings[0]
-				message := &VoiceMailMessage{
-					MediaURL:  recording.Media,
-					StartTime: parseTime(recording.StartTime),
-					EndTime:   parseTime(recording.EndTime),
-					UserID:    user.ID,
-					From:      call.From,
-				}
-				err = db.Create(message).Error
-				if err != nil {
-					debugf("Error on on saving voice mail message: %s\n", err.Error())
+		case "playback", "speak":
+			if form.Get("status") == "done" {
+				switch form.Get("tag") {
+				case "Greeting":
+					// after greeting play beep
+					debugf("Play beep\n")
+					api.PlayAudioToCall(form.Get("callId"), beepURL, false, "Beep")
+					break
+				case "Beep":
+					// after beep srart voice message recording
+					debugf("Starting call recording\n")
+					api.UpdateCall(form.Get("callId"), &bandwidth.UpdateCallData{RecordingEnabled: true})
 					break
 				}
-
-				// send notification about new voice mail message
-				if newVoiceMessageEvent != nil {
-					newVoiceMessageEvent.Pub(message, strconv.FormatUint(uint64(user.ID), 10))
+			}
+			break
+		case "timeout":
+			if fromAnotherLeg {
+				// another leg didn't answer call (for bridged incoming call)
+				debugf("Another leg timeout\n")
+				api.StopPlayAudioToCall(callID)
+				db.Model(&ActiveCall{}).Where("call_id = ?", callID).Update("bridge_id", "") // to suppress hang up this call too
+				debugf("Moving to voice mail\n")
+				// Play greeting
+				if user.GreetingURL == "" {
+					debugf("Play default greeting\n")
+					api.SpeakSentenceToCall(callID, "Hello. Please leave a message after beep.", "Greeting")
+				} else {
+					debugf("Play user's greeting\n")
+					api.PlayAudioToCall(callID, user.GreetingURL, false, "Greeting")
 				}
+				break
+			}
+		case "recording":
+			{
+				if form.Get("state") == "complete" {
+					// Voice message has been recorded. Save it into db.
+					debugf("Get recorded voice message info\n")
+					recording, err := api.GetRecording(form.Get("recordingId"))
+					if err != nil {
+						debugf("Error on get recording info %s\n", err.Error())
+						break
+					}
+					call, err := api.GetCall(callID)
+					if err != nil {
+						debugf("Error on get call info %s\n", err.Error())
+						break
+					}
+					if user != nil {
+						debugf("Saving recorded voice message to db\n")
+						message := &VoiceMailMessage{
+							MediaURL:  recording.Media,
+							StartTime: parseTime(recording.StartTime),
+							EndTime:   parseTime(recording.EndTime),
+							UserID:    user.ID,
+							From:      getCallerID(db, call.From),
+						}
+						err = db.Create(message).Error
+						if err != nil {
+							debugf("Error on on saving voice mail message: %s\n", err.Error())
+							break
+						}
+
+						// send notification about new voice mail message
+						if newVoiceMessageEvent != nil {
+							debugf("Publish SSE notification (for user %s)\n", user.UserName)
+							newVoiceMessageEvent.Pub(message, strconv.FormatUint(uint64(user.ID), 10))
+						}
+					}
+				}
+			}
+		case "hangup":
+			callID = form.Get("callId")
+
+			activeCalls := []ActiveCall{}
+			activeCall := ActiveCall{}
+			debugf("Hangup %s\n", callID)
+			// look for bridge data for call first
+			if db.First(&activeCall, "call_id = ?", callID).RecordNotFound() || activeCall.BridgeID == "" {
+				break
+			}
+			// then look for other calls in the bridge
+			err := db.Find(&activeCalls, "bridge_id = ? AND call_id <> ?", activeCall.BridgeID, callID).Error
+			if err != nil {
+				debugf("Error on getting bridged calls: %s\n", err.Error())
+				break
+			}
+			debugf("Hangup other %d calls\n", len(activeCalls))
+			for _, call := range activeCalls {
+				api.Hangup(call.CallID)
 			}
 			break
 		}
@@ -242,7 +323,7 @@ func getRoutes(router *gin.Engine, db *gorm.DB, newVoiceMessageEvent *pubsub.Pub
 			From:               user.PhoneNumber,
 			To:                 user.SIPURI,
 			CallbackHTTPMethod: "GET",
-			CallbackURL:        fmt.Sprintf("http://%s/recordCallback", c.Request.Host),
+			CallbackURL:        buildAbsoluteURL(c, "/recordCallback"),
 		})
 		if err != nil {
 			setError(c, http.StatusBadGateway, err)
@@ -447,6 +528,23 @@ func playGreeting(user *User) string {
 
 func playBeep() string {
 	return playAudioBXML(beepURL)
+}
+
+func getCallerID(db *gorm.DB, number string) string {
+	user := &User{}
+	if strings.Index(number, "sip:") == 0 && !db.First(user, "sip_uri = ?", number).RecordNotFound() {
+		// try to use phone number for caller id instead of sip uri
+		return user.PhoneNumber
+	}
+	return number
+}
+
+func getPrimaryCallID(tag string) string {
+	values := strings.Split(tag, ":")
+	if len(values) == 2 && values[0] == "AnotherLeg" {
+		return values[1]
+	}
+	return ""
 }
 
 func setErrorMessage(c *gin.Context, code int, message string) {

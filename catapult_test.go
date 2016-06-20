@@ -2,6 +2,7 @@ package main
 
 import (
 	"net/http"
+	"net/url"
 	"os"
 	"testing"
 
@@ -414,7 +415,7 @@ func TestPlayAudioToCall(t *testing.T) {
 		},
 	})
 	defer server.Close()
-	err := api.PlayAudioToCall("123", "url")
+	err := api.PlayAudioToCall("123", "url", false, "")
 	assert.NoError(t, err)
 }
 
@@ -427,7 +428,7 @@ func TestSpeakPlayAudioFail(t *testing.T) {
 		},
 	})
 	defer server.Close()
-	err := api.PlayAudioToCall("123", "url")
+	err := api.PlayAudioToCall("123", "url", false, "")
 	assert.Error(t, err)
 }
 
@@ -440,7 +441,7 @@ func TestSpeakSentenceToCall(t *testing.T) {
 		},
 	})
 	defer server.Close()
-	err := api.SpeakSentenceToCall("123", "text")
+	err := api.SpeakSentenceToCall("123", "text", "")
 	assert.NoError(t, err)
 }
 
@@ -453,7 +454,33 @@ func TestSpeakSentenceToCallFail(t *testing.T) {
 		},
 	})
 	defer server.Close()
-	err := api.SpeakSentenceToCall("123", "test")
+	err := api.SpeakSentenceToCall("123", "test", "")
+	assert.Error(t, err)
+}
+
+func TestStopPlayAudioToCall(t *testing.T) {
+	server, api := startMockCatapultServer(t, []RequestHandler{
+		RequestHandler{
+			PathAndQuery:     "/v1/users/userID/calls/123/audio",
+			Method:           http.MethodPost,
+			EstimatedContent: `{"fileUrl":""}`,
+		},
+	})
+	defer server.Close()
+	err := api.StopPlayAudioToCall("123")
+	assert.NoError(t, err)
+}
+
+func TestStopPlayAudioToCallFail(t *testing.T) {
+	server, api := startMockCatapultServer(t, []RequestHandler{
+		RequestHandler{
+			PathAndQuery:     "/v1/users/userID/calls/123/audio",
+			Method:           http.MethodPost,
+			StatusCodeToSend: http.StatusBadRequest,
+		},
+	})
+	defer server.Close()
+	err := api.StopPlayAudioToCall("123")
 	assert.Error(t, err)
 }
 
@@ -550,6 +577,40 @@ func TestCreateCallFail(t *testing.T) {
 	assert.Error(t, err)
 }
 
+func TestCreateBridge(t *testing.T) {
+	server, api := startMockCatapultServer(t, []RequestHandler{
+		RequestHandler{
+			PathAndQuery:     "/v1/users/userID/bridges",
+			Method:           http.MethodPost,
+			EstimatedContent: `{"bridgeAudio":"true","callIds":["456"]}`,
+			HeadersToSend:    map[string]string{"Location": "/v1/users/userID/bridges/123"},
+		},
+	})
+	defer server.Close()
+	id, err := api.CreateBridge(&bandwidth.BridgeData{
+		CallIDs:     []string{"456"},
+		BridgeAudio: true,
+	})
+	assert.NoError(t, err)
+	assert.Equal(t, "123", id)
+}
+
+func TestCreateBridgeFail(t *testing.T) {
+	server, api := startMockCatapultServer(t, []RequestHandler{
+		RequestHandler{
+			PathAndQuery:     "/v1/users/userID/bridges",
+			Method:           http.MethodPost,
+			StatusCodeToSend: http.StatusBadRequest,
+		},
+	})
+	defer server.Close()
+	_, err := api.CreateBridge(&bandwidth.BridgeData{
+		CallIDs:     []string{"456"},
+		BridgeAudio: true,
+	})
+	assert.Error(t, err)
+}
+
 func TestDownloadMediaFile(t *testing.T) {
 	server, api := startMockCatapultServer(t, []RequestHandler{
 		RequestHandler{
@@ -581,18 +642,31 @@ func TestDownloadMediaFileFail(t *testing.T) {
 	assert.Error(t, err)
 }
 
-func TestGetCallRecordings(t *testing.T) {
-	applicationIDs = map[string]string{"localhost": ""}
+func TestHangupCall(t *testing.T) {
 	server, api := startMockCatapultServer(t, []RequestHandler{
 		RequestHandler{
-			PathAndQuery:  "/v1/users/userID/calls/123/recordings",
-			Method:        http.MethodGet,
-			ContentToSend: `[]`,
+			PathAndQuery:     "/v1/users/userID/calls/123",
+			Method:           http.MethodPost,
+			EstimatedContent: `{"state":"completed"}`,
+			HeadersToSend:    map[string]string{"Location": "/v1/users/userID/calls/567"},
 		},
 	})
 	defer server.Close()
-	list, _ := api.GetCallRecordings("123")
-	assert.Equal(t, 0, len(list))
+	err := api.Hangup("123")
+	assert.NoError(t, err)
+}
+
+func TestHangupFail(t *testing.T) {
+	server, api := startMockCatapultServer(t, []RequestHandler{
+		RequestHandler{
+			PathAndQuery:     "/v1/users/userID/calls/123",
+			Method:           http.MethodPost,
+			StatusCodeToSend: http.StatusBadRequest,
+		},
+	})
+	defer server.Close()
+	err := api.Hangup("123")
+	assert.Error(t, err)
 }
 
 func TestCatapultMiddleware(t *testing.T) {
@@ -657,6 +731,16 @@ func TestGatherBXML(t *testing.T) {
 func TestRecordBXML(t *testing.T) {
 	assert.Equal(t, "<Record requestUrl=\"url\" terminatingDigits=\"#\" maxDuration=\"3600\"/>", recordBXML("url"))
 	assert.Equal(t, "<Record requestUrl=\"url\" terminatingDigits=\"01\" maxDuration=\"3600\"/>", recordBXML("url", "01"))
+}
+
+func TestBuildAbsoluteUrl(t *testing.T) {
+	context := createFakeGinContext()
+	assert.Equal(t, "http://localhost/test", buildAbsoluteURL(context, "/test"))
+	assert.Equal(t, "http://localhost/test1", buildAbsoluteURL(context, "test1"))
+	context.Request.URL = &url.URL{Scheme: "ftp"}
+	assert.Equal(t, "ftp://localhost/test", buildAbsoluteURL(context, "/test"))
+	context.Request.Header.Set("X-Forwarded-Proto", "https")
+	assert.Equal(t, "https://localhost/test", buildAbsoluteURL(context, "/test"))
 }
 
 var originalRandomString = randomString

@@ -14,7 +14,6 @@ func main() {
 	router := gin.Default()
 	router.NoRoute(static.ServeRoot("/", "./public")) //serve static files for other routes
 	router.Use(catapultMiddleware)                    // make CatapultAPI available for all routes
-	router.Use(timerMiddleware)
 	connectionString := os.Getenv("DATABASE_URL")
 	if connectionString == "" {
 		// Docker's links support
