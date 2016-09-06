@@ -1,0 +1,16 @@
+version: '2'
+services:
+    web:
+        build: .
+        ports: 
+            - "3000:3000"
+        depends_on:
+            - postgres
+        environment:
+            - DATABASE_URL=postgresql://postgres:mysecretpassword@postgres/postgres?sslmode=disable
+        env_file: .env
+        restart: always
+
+    postgres:
+        image: postgres:9.5
+        restart: always
